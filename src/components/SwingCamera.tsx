@@ -5,6 +5,8 @@ interface SwingCameraProps {
   isRecording: boolean;
   onRecordingComplete: (videoUrl: string) => void;
   onStartRecording: () => void;
+  leftHanded: boolean;
+  onToggleHand: () => void;
 }
 
 export default function SwingCamera({
@@ -12,6 +14,8 @@ export default function SwingCamera({
   isRecording,
   onRecordingComplete,
   onStartRecording,
+  leftHanded,
+  onToggleHand,
 }: SwingCameraProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -77,6 +81,12 @@ export default function SwingCamera({
 
     if (isRecording) return; // Don't draw guides while recording
 
+    // Right-handed: ball left, golfer right, target left
+    // Left-handed: ball right, golfer left, target right
+    const ballPct = leftHanded ? 0.55 : 0.45;
+    const stancePct = leftHanded ? 0.42 : 0.58;
+    const targetDir = leftHanded ? 1 : -1; // 1 = right, -1 = left
+
     // Ground line
     const groundY = h * 0.78;
     ctx.strokeStyle = 'rgba(255, 204, 51, 0.4)';
@@ -89,42 +99,37 @@ export default function SwingCamera({
     ctx.setLineDash([]);
 
     // Ball position marker
-    const ballX = w * 0.45;
+    const ballX = w * ballPct;
     const ballY = groundY;
     const ballR = 6;
 
-    // Circle for ball placement
     ctx.strokeStyle = 'rgba(255, 204, 51, 0.7)';
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.arc(ballX, ballY, ballR + 8, 0, Math.PI * 2);
     ctx.stroke();
 
-    // Small filled circle
     ctx.fillStyle = 'rgba(255, 204, 51, 0.5)';
     ctx.beginPath();
     ctx.arc(ballX, ballY, ballR, 0, Math.PI * 2);
     ctx.fill();
 
-    // "BALL" label
     ctx.font = '10px "DM Sans", sans-serif';
     ctx.fillStyle = 'rgba(255, 204, 51, 0.7)';
     ctx.textAlign = 'center';
     ctx.fillText('BALL', ballX, ballY + 26);
 
-    // Golfer stance zone (to the right of ball for right-handed)
-    const stanceX = w * 0.58;
+    // Golfer stance zone
+    const stanceX = w * stancePct;
     const stanceW = w * 0.18;
     const stanceTop = h * 0.2;
 
-    // Stance outline (simplified golfer silhouette zone)
     ctx.strokeStyle = 'rgba(255, 204, 51, 0.25)';
     ctx.lineWidth = 1.5;
     ctx.setLineDash([6, 4]);
     ctx.strokeRect(stanceX - stanceW / 2, stanceTop, stanceW, groundY - stanceTop);
     ctx.setLineDash([]);
 
-    // "GOLFER" label
     ctx.fillStyle = 'rgba(255, 204, 51, 0.5)';
     ctx.font = '10px "DM Sans", sans-serif';
     ctx.fillText('GOLFER', stanceX, stanceTop - 8);
@@ -135,33 +140,37 @@ export default function SwingCamera({
     ctx.fillRect(stanceX - 14, footY, 8, 4);
     ctx.fillRect(stanceX + 6, footY, 8, 4);
 
-    // Camera position hint (arrow pointing to indicate perpendicular view)
+    // Camera hint
     ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
     ctx.font = '9px "DM Sans", sans-serif';
     ctx.textAlign = 'left';
     ctx.fillText('Camera: side view', 12, h - 12);
 
-    // Target direction arrow (left side)
+    // Target direction arrow
     const arrowY = groundY - 30;
+    const arrowStart = ballX;
+    const arrowEnd = targetDir > 0 ? w * 0.9 : w * 0.1;
     ctx.strokeStyle = 'rgba(255, 204, 51, 0.4)';
     ctx.lineWidth = 1.5;
     ctx.beginPath();
-    ctx.moveTo(ballX, arrowY);
-    ctx.lineTo(w * 0.1, arrowY);
+    ctx.moveTo(arrowStart, arrowY);
+    ctx.lineTo(arrowEnd, arrowY);
     ctx.stroke();
     // Arrow head
+    const headDir = targetDir > 0 ? -1 : 1;
     ctx.beginPath();
-    ctx.moveTo(w * 0.1, arrowY);
-    ctx.lineTo(w * 0.1 + 8, arrowY - 4);
-    ctx.moveTo(w * 0.1, arrowY);
-    ctx.lineTo(w * 0.1 + 8, arrowY + 4);
+    ctx.moveTo(arrowEnd, arrowY);
+    ctx.lineTo(arrowEnd + headDir * 8, arrowY - 4);
+    ctx.moveTo(arrowEnd, arrowY);
+    ctx.lineTo(arrowEnd + headDir * 8, arrowY + 4);
     ctx.stroke();
 
     ctx.fillStyle = 'rgba(255, 204, 51, 0.5)';
     ctx.font = '9px "DM Sans", sans-serif';
-    ctx.textAlign = 'left';
-    ctx.fillText('TARGET', w * 0.04, arrowY - 8);
-  }, [isRecording]);
+    ctx.textAlign = targetDir > 0 ? 'right' : 'left';
+    const targetLabelX = targetDir > 0 ? w * 0.96 : w * 0.04;
+    ctx.fillText('TARGET', targetLabelX, arrowY - 8);
+  }, [isRecording, leftHanded]);
 
   // Render loop
   useEffect(() => {
@@ -311,6 +320,12 @@ export default function SwingCamera({
           <div className="text-white/60 text-xs text-center px-8">
             Position phone sideways with ball and golfer in frame
           </div>
+          <button
+            onClick={onToggleHand}
+            className="px-4 py-2 bg-white/10 backdrop-blur-sm rounded-lg text-gold text-xs tracking-wider cursor-pointer"
+          >
+            {leftHanded ? 'LEFT-HANDED' : 'RIGHT-HANDED'}
+          </button>
           <div className="flex items-center gap-6">
             <button
               onClick={onClose}

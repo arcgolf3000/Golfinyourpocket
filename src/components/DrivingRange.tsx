@@ -37,6 +37,9 @@ export default function DrivingRange() {
   const [viewMode, setViewMode] = useState<ViewMode>('simulator');
   const [isRecording, setIsRecording] = useState(false);
   const [swingVideoUrl, setSwingVideoUrl] = useState<string | null>(null);
+  const [leftHanded, setLeftHanded] = useState(() => {
+    return localStorage.getItem('arc-left-handed') === 'true';
+  });
 
   // Persist shots to localStorage
   useEffect(() => {
@@ -227,6 +230,14 @@ export default function DrivingRange() {
           isRecording={isRecording}
           onRecordingComplete={handleRecordingComplete}
           onStartRecording={() => setIsRecording(true)}
+          leftHanded={leftHanded}
+          onToggleHand={() => {
+            setLeftHanded(prev => {
+              const next = !prev;
+              localStorage.setItem('arc-left-handed', String(next));
+              return next;
+            });
+          }}
         />
       )}
     </div>
