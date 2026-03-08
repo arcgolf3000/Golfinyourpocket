@@ -281,8 +281,9 @@ function projectGround(
   const cx = width / 2;
   // Ground position (no height)
   const gndY = groundY - (groundY - horizon) * (1 - scale);
-  // Height offset: multiply strongly so ball goes into sky
-  const heightPx = heightYards * (height * 0.012) * (0.3 + scale * 0.7);
+  // Height offset: very aggressive multiplier so ball visibly arcs into sky
+  // A 30-yard apex should reach near the top of the canvas
+  const heightPx = heightYards * (height * 0.06) * (0.4 + scale * 0.6);
   const screenX = cx + lateralYards * scale * 3.5;
   const screenY = gndY - heightPx;
   return { x: screenX, y: screenY, scale };
@@ -551,39 +552,48 @@ function drawGroundView(
     }
   }
 
-  // === BALL FLIGHT — thin yellow/lime lines like Impact Vision ===
+  // === BALL FLIGHT — bright visible trail ===
   if (trajectory && animationProgress > 0) {
     const pointCount = Math.floor(trajectory.length * animationProgress);
 
     if (pointCount > 1) {
-      // Thin yellow-green ball trail (like reference image)
-      ctx.shadowColor = 'rgba(200, 255, 50, 0.3)';
-      ctx.shadowBlur = 4;
-      for (let i = 1; i < pointCount; i++) {
+      // Outer glow trail (wider, softer)
+      ctx.shadowColor = 'rgba(255, 255, 100, 0.5)';
+      ctx.shadowBlur = 8;
+      ctx.beginPath();
+      for (let i = 0; i < pointCount; i++) {
         const p = trajectory[i];
-        const prev = trajectory[i - 1];
         const pp = projectH(p.x * M_TO_YARDS, p.y * M_TO_YARDS, p.z * M_TO_YARDS);
-        const prevP = projectH(prev.x * M_TO_YARDS, prev.y * M_TO_YARDS, prev.z * M_TO_YARDS);
-        if (!pp || !prevP) continue;
-
-        const alpha = 0.3 + (i / pointCount) * 0.5;
-        ctx.beginPath();
-        ctx.strokeStyle = `rgba(210, 255, 60, ${alpha})`;
-        ctx.lineWidth = 1.5;
-        ctx.moveTo(prevP.x, prevP.y);
-        ctx.lineTo(pp.x, pp.y);
-        ctx.stroke();
+        if (!pp) continue;
+        if (i === 0) ctx.moveTo(pp.x, pp.y);
+        else ctx.lineTo(pp.x, pp.y);
       }
+      ctx.strokeStyle = 'rgba(255, 255, 120, 0.4)';
+      ctx.lineWidth = 3;
+      ctx.stroke();
       ctx.shadowBlur = 0;
+
+      // Inner bright trail
+      ctx.beginPath();
+      for (let i = 0; i < pointCount; i++) {
+        const p = trajectory[i];
+        const pp = projectH(p.x * M_TO_YARDS, p.y * M_TO_YARDS, p.z * M_TO_YARDS);
+        if (!pp) continue;
+        if (i === 0) ctx.moveTo(pp.x, pp.y);
+        else ctx.lineTo(pp.x, pp.y);
+      }
+      ctx.strokeStyle = 'rgba(255, 255, 200, 0.85)';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
 
       // Vertical yellow line at landing point
       if (animationProgress >= 1) {
         const finalP = trajectory[trajectory.length - 1];
         const landScreen = projectG(finalP.x * M_TO_YARDS, finalP.z * M_TO_YARDS);
-        const ballTop = projectH(finalP.x * M_TO_YARDS, 5, finalP.z * M_TO_YARDS);
+        const ballTop = projectH(finalP.x * M_TO_YARDS, 8, finalP.z * M_TO_YARDS);
         if (landScreen && ballTop) {
-          ctx.strokeStyle = 'rgba(220, 255, 60, 0.5)';
-          ctx.lineWidth = 1;
+          ctx.strokeStyle = 'rgba(255, 255, 120, 0.6)';
+          ctx.lineWidth = 1.5;
           ctx.beginPath();
           ctx.moveTo(landScreen.x, landScreen.y);
           ctx.lineTo(ballTop.x, ballTop.y);
@@ -597,12 +607,12 @@ function drawGroundView(
       const current = trajectory[Math.min(pointCount - 1, trajectory.length - 1)];
       const bp = projectH(current.x * M_TO_YARDS, current.y * M_TO_YARDS, current.z * M_TO_YARDS);
       if (bp) {
-        const ballSize = Math.max(3.5, 6 * bp.scale);
+        const ballSize = Math.max(4, 7 * bp.scale);
 
         // Vertical line from ball down to ground
         const shadowP = projectG(current.x * M_TO_YARDS, current.z * M_TO_YARDS);
-        if (shadowP && current.y * M_TO_YARDS > 2) {
-          ctx.strokeStyle = 'rgba(220, 255, 60, 0.3)';
+        if (shadowP && current.y * M_TO_YARDS > 1) {
+          ctx.strokeStyle = 'rgba(255, 255, 120, 0.35)';
           ctx.lineWidth = 1;
           ctx.beginPath();
           ctx.moveTo(bp.x, bp.y);
@@ -613,17 +623,18 @@ function drawGroundView(
           const sr = Math.max(2, 3 * shadowP.scale);
           ctx.beginPath();
           ctx.arc(shadowP.x, shadowP.y, sr, 0, 2 * Math.PI);
-          ctx.fillStyle = 'rgba(0, 0, 0, 0.12)';
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.15)';
           ctx.fill();
         }
 
         // Ball glow
-        const glow = ctx.createRadialGradient(bp.x, bp.y, 0, bp.x, bp.y, ballSize * 3);
-        glow.addColorStop(0, 'rgba(255, 255, 255, 0.9)');
-        glow.addColorStop(0.3, 'rgba(220, 255, 100, 0.3)');
-        glow.addColorStop(1, 'rgba(220, 255, 100, 0)');
+        const glow = ctx.createRadialGradient(bp.x, bp.y, 0, bp.x, bp.y, ballSize * 4);
+        glow.addColorStop(0, 'rgba(255, 255, 255, 1)');
+        glow.addColorStop(0.2, 'rgba(255, 255, 150, 0.5)');
+        glow.addColorStop(0.5, 'rgba(255, 255, 100, 0.15)');
+        glow.addColorStop(1, 'rgba(255, 255, 100, 0)');
         ctx.beginPath();
-        ctx.arc(bp.x, bp.y, ballSize * 3, 0, 2 * Math.PI);
+        ctx.arc(bp.x, bp.y, ballSize * 4, 0, 2 * Math.PI);
         ctx.fillStyle = glow;
         ctx.fill();
 
@@ -632,9 +643,6 @@ function drawGroundView(
         ctx.arc(bp.x, bp.y, ballSize, 0, 2 * Math.PI);
         ctx.fillStyle = '#ffffff';
         ctx.fill();
-        ctx.strokeStyle = 'rgba(0,0,0,0.15)';
-        ctx.lineWidth = 0.5;
-        ctx.stroke();
       }
     }
   }
