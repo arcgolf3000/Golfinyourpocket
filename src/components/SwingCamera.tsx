@@ -91,8 +91,8 @@ export default function SwingCamera({
     const ballPct = 0.5;   // ball between feet
     const targetDir = leftHanded ? 1 : -1; // 1 = right, -1 = left
 
-    // Ground line — positioned in upper half so bottom controls don't overlap
-    const groundY = h * 0.55;
+    // Ground line — centered vertically, above bottom controls
+    const groundY = h * 0.65;
     ctx.strokeStyle = 'rgba(255, 204, 51, 0.4)';
     ctx.lineWidth = 1;
     ctx.setLineDash([8, 6]);
@@ -102,58 +102,54 @@ export default function SwingCamera({
     ctx.stroke();
     ctx.setLineDash([]);
 
-    // Golfer stance zone
+    // Golfer stance zone — large and easy to see
     const stanceX = w * stancePct;
-    const stanceW = w * 0.22;
-    const stanceTop = h * 0.15;
+    const stanceW = w * 0.35;
+    const stanceTop = h * 0.18;
 
     ctx.strokeStyle = 'rgba(255, 204, 51, 0.25)';
-    ctx.lineWidth = 1.5;
-    ctx.setLineDash([6, 4]);
+    ctx.lineWidth = 2;
+    ctx.setLineDash([8, 5]);
     ctx.strokeRect(stanceX - stanceW / 2, stanceTop, stanceW, groundY - stanceTop);
     ctx.setLineDash([]);
 
-    ctx.fillStyle = 'rgba(255, 204, 51, 0.5)';
-    ctx.font = '10px "DM Sans", sans-serif';
+    ctx.fillStyle = 'rgba(255, 204, 51, 0.6)';
+    ctx.font = '13px "DM Sans", sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('GOLFER', stanceX, stanceTop - 8);
+    ctx.fillText('GOLFER', stanceX, stanceTop - 10);
 
-    // Feet markers (wider apart to show stance width)
-    const footY = groundY - 4;
-    const footSpread = stanceW * 0.35;
-    ctx.fillStyle = 'rgba(255, 204, 51, 0.4)';
-    ctx.fillRect(stanceX - footSpread - 4, footY, 8, 4);
-    ctx.fillRect(stanceX + footSpread - 4, footY, 8, 4);
+    // Feet markers (wide apart)
+    const footY = groundY - 6;
+    const footSpread = stanceW * 0.32;
+    ctx.fillStyle = 'rgba(255, 204, 51, 0.5)';
+    ctx.fillRect(stanceX - footSpread - 6, footY, 12, 6);
+    ctx.fillRect(stanceX + footSpread - 6, footY, 12, 6);
 
-    // Ball position marker — between the feet, on the ground
+    // Ball position marker — large and clear, between the feet
     const ballX = w * ballPct;
     const ballY = groundY;
-    const ballR = 6;
+    const ballR = 10;
 
+    // Outer ring
     ctx.strokeStyle = 'rgba(255, 204, 51, 0.7)';
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 2.5;
     ctx.beginPath();
-    ctx.arc(ballX, ballY, ballR + 8, 0, Math.PI * 2);
+    ctx.arc(ballX, ballY, ballR + 10, 0, Math.PI * 2);
     ctx.stroke();
 
+    // Inner ball
     ctx.fillStyle = 'rgba(255, 204, 51, 0.5)';
     ctx.beginPath();
     ctx.arc(ballX, ballY, ballR, 0, Math.PI * 2);
     ctx.fill();
 
-    ctx.font = '10px "DM Sans", sans-serif';
-    ctx.fillStyle = 'rgba(255, 204, 51, 0.7)';
+    ctx.font = '13px "DM Sans", sans-serif';
+    ctx.fillStyle = 'rgba(255, 204, 51, 0.8)';
     ctx.textAlign = 'center';
-    ctx.fillText('BALL', ballX, ballY + 26);
-
-    // Camera hint
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
-    ctx.font = '9px "DM Sans", sans-serif';
-    ctx.textAlign = 'left';
-    ctx.fillText('Camera: side view', 12, h - 12);
+    ctx.fillText('BALL', ballX, ballY + 32);
 
     // Target direction arrow
-    const arrowY = groundY - 30;
+    const arrowY = groundY - 40;
     const arrowStart = ballX;
     const arrowEnd = targetDir > 0 ? w * 0.9 : w * 0.1;
     ctx.strokeStyle = 'rgba(255, 204, 51, 0.4)';
