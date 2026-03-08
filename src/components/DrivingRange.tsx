@@ -7,6 +7,7 @@ import PowerMeter from './PowerMeter';
 import ClubSelector from './ClubSelector';
 import LaunchMonitor from './LaunchMonitor';
 import ShotHistory from './ShotHistory';
+import ARCamera from './ARCamera';
 
 const ANIMATION_DURATION = 2500; // ms
 
@@ -30,6 +31,7 @@ export default function DrivingRange() {
   const [isAnimating, setIsAnimating] = useState(false);
   const animStartRef = useRef(0);
   const animFrameRef = useRef(0);
+  const [arMode, setArMode] = useState(false);
 
   // Persist shots to localStorage
   useEffect(() => {
@@ -96,9 +98,15 @@ export default function DrivingRange() {
   return (
     <div className="min-h-screen bg-dark-bg flex flex-col items-center px-4 py-6 gap-5 max-w-md mx-auto">
       {/* Header */}
-      <header className="text-center flex flex-col items-center gap-1">
+      <header className="text-center flex flex-col items-center gap-1 relative w-full">
         <h1 className="text-gold text-xl font-bold tracking-widest uppercase">ARC</h1>
         <p className="text-[10px] text-dark-text tracking-[0.3em] uppercase">Pocket Golf Sim</p>
+        <button
+          onClick={() => setArMode(true)}
+          className="absolute right-0 top-0 px-3 py-1.5 rounded-lg bg-gold/10 border border-gold/30 text-gold text-[10px] tracking-widest uppercase hover:bg-gold/20 transition-colors cursor-pointer"
+        >
+          AR
+        </button>
       </header>
 
       {/* Club selector */}
@@ -167,6 +175,21 @@ export default function DrivingRange() {
       <footer className="text-[9px] text-dark-text/50 text-center py-4">
         ARC Pocket Golf SIM v0.1 — Driving Range MVP
       </footer>
+
+      {/* AR Camera overlay */}
+      {arMode && (
+        <>
+          <ARCamera
+            trajectory={currentShot?.trajectory ?? null}
+            animationProgress={animProgress}
+            onClose={() => setArMode(false)}
+          />
+          {/* Power meter floated over AR view */}
+          <div className="fixed bottom-6 left-4 right-4 z-[60]">
+            <PowerMeter onSwing={handleSwing} disabled={isAnimating} />
+          </div>
+        </>
+      )}
     </div>
   );
 }
