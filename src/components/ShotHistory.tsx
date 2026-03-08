@@ -1,10 +1,14 @@
 import type { ShotResult } from '../engine/physics';
+import { type UnitSystem, distStr, distUnit } from '../data/profile';
 
 interface ShotHistoryProps {
   shots: Array<{ club: string; result: ShotResult }>;
+  units: UnitSystem;
 }
 
-export default function ShotHistory({ shots }: ShotHistoryProps) {
+export default function ShotHistory({ shots, units }: ShotHistoryProps) {
+  const du = distUnit(units);
+
   if (shots.length === 0) {
     return (
       <div className="text-center text-dark-text text-xs py-4">
@@ -26,10 +30,10 @@ export default function ShotHistory({ shots }: ShotHistoryProps) {
         </span>
         <div className="flex gap-4 text-xs font-mono">
           <span className="text-dark-text">
-            Carry <span className="text-white font-semibold">{avgCarry}</span>
+            Carry <span className="text-white font-semibold">{distStr(avgCarry, units)}</span>
           </span>
           <span className="text-dark-text">
-            Total <span className="text-gold font-semibold">{avgTotal}</span>
+            Total <span className="text-gold font-semibold">{distStr(avgTotal, units)}</span>
           </span>
         </div>
       </div>
@@ -42,13 +46,13 @@ export default function ShotHistory({ shots }: ShotHistoryProps) {
             className="flex justify-between items-center bg-dark-panel rounded px-3 py-1 text-xs"
           >
             <span className="text-dark-text font-medium w-14">{shot.club}</span>
-            <span className="font-mono text-white">{shot.result.total} yds</span>
-            <span className="font-mono text-dark-text">{shot.result.carry} carry</span>
+            <span className="font-mono text-white">{distStr(shot.result.total, units)} {du}</span>
+            <span className="font-mono text-dark-text">{distStr(shot.result.carry, units)} carry</span>
             <span className={`font-mono text-[10px] w-12 text-right ${
               shot.result.dir === 'ST' ? 'text-green-500' :
               shot.result.dir === 'L' ? 'text-blue-400' : 'text-red-400'
             }`}>
-              {shot.result.offline > 0 ? `${shot.result.offline} ${shot.result.dir}` : 'ST'}
+              {shot.result.offline > 0 ? `${distStr(shot.result.offline, units)} ${shot.result.dir}` : 'ST'}
             </span>
           </div>
         ))}

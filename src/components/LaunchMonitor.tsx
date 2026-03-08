@@ -1,7 +1,9 @@
 import type { ShotResult } from '../engine/physics';
+import { type UnitSystem, distStr, distUnit, speedStr, speedUnit } from '../data/profile';
 
 interface LaunchMonitorProps {
   shot: ShotResult | null;
+  units: UnitSystem;
 }
 
 interface DataField {
@@ -10,31 +12,34 @@ interface DataField {
   unit: string;
 }
 
-export default function LaunchMonitor({ shot }: LaunchMonitorProps) {
+export default function LaunchMonitor({ shot, units }: LaunchMonitorProps) {
+  const du = distUnit(units);
+  const su = speedUnit(units);
+
   const fields: DataField[] = shot
     ? [
-        { label: 'Ball Speed', value: shot.ballSpeed.toFixed(1), unit: 'mph' },
-        { label: 'Club Speed', value: shot.clubSpeed.toFixed(1), unit: 'mph' },
+        { label: 'Ball Speed', value: speedStr(shot.ballSpeed, units), unit: su },
+        { label: 'Club Speed', value: speedStr(shot.clubSpeed, units), unit: su },
         { label: 'Launch Angle', value: shot.launchAngle.toFixed(1), unit: '°' },
         { label: 'Spin Rate', value: shot.spinRate.toLocaleString(), unit: 'rpm' },
-        { label: 'Carry', value: String(shot.carry), unit: 'yds' },
-        { label: 'Total', value: String(shot.total), unit: 'yds' },
-        { label: 'Apex', value: String(shot.apex), unit: 'yds' },
+        { label: 'Carry', value: distStr(shot.carry, units), unit: du },
+        { label: 'Total', value: distStr(shot.total, units), unit: du },
+        { label: 'Apex', value: distStr(shot.apex, units), unit: du },
         { label: 'Hang Time', value: shot.hangTime.toFixed(2), unit: 's' },
         { label: 'Smash Factor', value: shot.smash.toFixed(2), unit: '' },
-        { label: 'Offline', value: `${shot.offline} ${shot.dir}`, unit: 'yds' },
+        { label: 'Offline', value: `${distStr(shot.offline, units)} ${shot.dir}`, unit: du },
       ]
     : [
-        { label: 'Ball Speed', value: '—', unit: 'mph' },
-        { label: 'Club Speed', value: '—', unit: 'mph' },
+        { label: 'Ball Speed', value: '—', unit: su },
+        { label: 'Club Speed', value: '—', unit: su },
         { label: 'Launch Angle', value: '—', unit: '°' },
         { label: 'Spin Rate', value: '—', unit: 'rpm' },
-        { label: 'Carry', value: '—', unit: 'yds' },
-        { label: 'Total', value: '—', unit: 'yds' },
-        { label: 'Apex', value: '—', unit: 'yds' },
+        { label: 'Carry', value: '—', unit: du },
+        { label: 'Total', value: '—', unit: du },
+        { label: 'Apex', value: '—', unit: du },
         { label: 'Hang Time', value: '—', unit: 's' },
         { label: 'Smash Factor', value: '—', unit: '' },
-        { label: 'Offline', value: '—', unit: 'yds' },
+        { label: 'Offline', value: '—', unit: du },
       ];
 
   return (

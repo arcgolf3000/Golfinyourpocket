@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { simulate, type ShotResult } from '../engine/physics';
 import { getClub, CLUBS } from '../data/clubs';
+import { loadProfile, saveProfile, type UserProfile, type UnitSystem } from '../data/profile';
 import RangeCanvas from '../canvas/RangeCanvas';
 import TrajectoryCanvas from '../canvas/TrajectoryCanvas';
 import PowerMeter from './PowerMeter';
@@ -9,10 +10,11 @@ import LaunchMonitor from './LaunchMonitor';
 import ShotHistory from './ShotHistory';
 import SwingCamera from './SwingCamera';
 import SwingPlayback from './SwingPlayback';
+import ProfileScreen from './ProfileScreen';
 
 const ANIMATION_DURATION = 2500; // ms
 
-type ViewMode = 'simulator' | 'camera';
+type ViewMode = 'simulator' | 'camera' | 'profile';
 
 interface ShotRecord {
   club: string;
@@ -20,6 +22,7 @@ interface ShotRecord {
 }
 
 export default function DrivingRange() {
+  const [profile, setProfile] = useState<UserProfile>(loadProfile);
   const [selectedClub, setSelectedClub] = useState('driver');
   const [currentShot, setCurrentShot] = useState<ShotResult | null>(null);
   const [shots, setShots] = useState<ShotRecord[]>(() => {
@@ -37,9 +40,6 @@ export default function DrivingRange() {
   const [viewMode, setViewMode] = useState<ViewMode>('simulator');
   const [isRecording, setIsRecording] = useState(false);
   const [swingVideoUrl, setSwingVideoUrl] = useState<string | null>(null);
-  const [leftHanded, setLeftHanded] = useState(() => {
-    return localStorage.getItem('arc-left-handed') === 'true';
-  });
 
   // Persist shots to localStorage
   useEffect(() => {
@@ -61,7 +61,6 @@ export default function DrivingRange() {
     const animateShot = (now: number) => {
       const elapsed = now - animStartRef.current;
       const progress = Math.min(elapsed / ANIMATION_DURATION, 1);
-      // Ease out cubic for natural deceleration
       const eased = 1 - Math.pow(1 - progress, 3);
       setAnimProgress(eased);
 
@@ -109,43 +108,53 @@ export default function DrivingRange() {
     setViewMode('simulator');
   }, []);
 
+  const handleProfileSave = useCallback((updated: UserProfile) => {
+    setProfile(updated);
+    saveProfile(updated);
+  }, []);
+
+  const units: UnitSystem = profile.units;
+
   return (
     <div className="min-h-screen bg-dark-bg flex flex-col items-center px-4 py-6 gap-5 max-w-md mx-auto">
       {/* Header */}
       <header className="text-center flex flex-col items-center gap-1 relative w-full">
         <h1 className="text-gold text-xl font-bold tracking-widest uppercase">ARC</h1>
-        <p className="text-[10px] text-dark-text tracking-[0.3em] uppercase">Pocket Golf Sim</p>
+        <p className="text-[10px] text-dark-text tracking-[0.3em] uppercase">
+          {profile.name ? `${profile.name}'s Pocket Golf Sim` : 'Pocket Golf Sim'}
+        </p>
       </header>
 
       {/* View toggle */}
       <div className="flex rounded-lg overflow-hidden border border-dark-border w-full">
-        <button
-          onClick={() => setViewMode('simulator')}
-          className={`flex-1 py-2 text-[10px] tracking-widest uppercase transition-colors cursor-pointer ${
-            viewMode === 'simulator'
-              ? 'bg-gold/20 text-gold'
-              : 'bg-dark-card text-dark-text'
-          }`}
-        >
-          Simulator
-        </button>
-        <button
-          onClick={() => setViewMode('camera')}
-          className={`flex-1 py-2 text-[10px] tracking-widest uppercase transition-colors cursor-pointer ${
-            viewMode === 'camera'
-              ? 'bg-gold/20 text-gold'
-              : 'bg-dark-card text-dark-text'
-          }`}
-        >
-          Camera
-        </button>
+        {(['simulator', 'camera', 'profile'] as ViewMode[]).map((mode) => (
+          <button
+            key={mode}
+            onClick={() => setViewMode(mode)}
+            className={`flex-1 py-2 text-[10px] tracking-widest uppercase transition-colors cursor-pointer ${
+              viewMode === mode
+                ? 'bg-gold/20 text-gold'
+                : 'bg-dark-card text-dark-text'
+            }`}
+          >
+            {mode}
+          </button>
+        ))}
       </div>
 
-      {/* Club selector (always visible) */}
-      <ClubSelector selected={selectedClub} onSelect={setSelectedClub} />
+      {viewMode === 'profile' && (
+        <ProfileScreen
+          profile={profile}
+          onSave={handleProfileSave}
+          onClose={() => setViewMode('simulator')}
+        />
+      )}
 
       {viewMode === 'simulator' && (
         <>
+          {/* Club selector */}
+          <ClubSelector selected={selectedClub} onSelect={setSelectedClub} />
+
           {/* Swing replay (if recorded) */}
           {swingVideoUrl && (
             <SwingPlayback
@@ -168,6 +177,7 @@ export default function DrivingRange() {
               trajectory={currentShot?.trajectory ?? null}
               animationProgress={animProgress}
               shotLandings={shotLandings}
+              units={units}
             />
           </div>
 
@@ -182,6 +192,7 @@ export default function DrivingRange() {
               trajectory={currentShot?.trajectory ?? null}
               animationProgress={animProgress}
               apex={currentShot?.apex ?? 0}
+              units={units}
             />
           </div>
 
@@ -195,7 +206,7 @@ export default function DrivingRange() {
             <div className="text-[10px] text-dark-text tracking-widest uppercase text-center">
               Launch Monitor
             </div>
-            <LaunchMonitor shot={currentShot} />
+            <LaunchMonitor shot={currentShot} units={units} />
           </div>
 
           {/* Shot history */}
@@ -213,7 +224,7 @@ export default function DrivingRange() {
                 </button>
               )}
             </div>
-            <ShotHistory shots={shots} />
+            <ShotHistory shots={shots} units={units} />
           </div>
         </>
       )}
@@ -230,13 +241,10 @@ export default function DrivingRange() {
           isRecording={isRecording}
           onRecordingComplete={handleRecordingComplete}
           onStartRecording={() => setIsRecording(true)}
-          leftHanded={leftHanded}
+          leftHanded={profile.leftHanded}
+          units={units}
           onToggleHand={() => {
-            setLeftHanded(prev => {
-              const next = !prev;
-              localStorage.setItem('arc-left-handed', String(next));
-              return next;
-            });
+            handleProfileSave({ ...profile, leftHanded: !profile.leftHanded });
           }}
         />
       )}

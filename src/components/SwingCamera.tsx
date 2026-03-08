@@ -1,4 +1,5 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
+import type { UnitSystem } from '../data/profile';
 
 interface SwingCameraProps {
   onClose: () => void;
@@ -7,6 +8,7 @@ interface SwingCameraProps {
   onStartRecording: () => void;
   leftHanded: boolean;
   onToggleHand: () => void;
+  units: UnitSystem;
 }
 
 export default function SwingCamera({
@@ -16,6 +18,7 @@ export default function SwingCamera({
   onStartRecording,
   leftHanded,
   onToggleHand,
+  units,
 }: SwingCameraProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -333,10 +336,10 @@ export default function SwingCamera({
           <div className="bg-black/50 backdrop-blur-sm rounded-xl px-4 py-3 mx-6 text-center space-y-1">
             <div className="text-gold text-[10px] tracking-widest uppercase mb-1">Setup Guide</div>
             <div className="text-white/60 text-[11px] leading-relaxed">
-              Camera <span className="text-white/80">8–10 ft</span> away, waist height
+              Camera <span className="text-white/80">{units === 'metric' ? '2.5–3 m' : '8–10 ft'}</span> away, waist height
             </div>
             <div className="text-white/60 text-[11px] leading-relaxed">
-              Net <span className="text-white/80">7–10 ft</span> in front of ball
+              Net <span className="text-white/80">{units === 'metric' ? '2–3 m' : '7–10 ft'}</span> in front of ball
             </div>
           </div>
           <div className="flex items-center gap-6">

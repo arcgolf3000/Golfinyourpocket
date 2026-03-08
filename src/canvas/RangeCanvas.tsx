@@ -1,5 +1,6 @@
 import { useRef, useEffect, useCallback } from 'react';
 import type { TrajectoryPoint } from '../engine/physics';
+import type { UnitSystem } from '../data/profile';
 
 interface RangeCanvasProps {
   width: number;
@@ -7,12 +8,14 @@ interface RangeCanvasProps {
   trajectory: TrajectoryPoint[] | null;
   animationProgress: number; // 0 to 1
   shotLandings: Array<{ x: number; z: number; club: string }>;
+  units: UnitSystem;
 }
 
 const DISTANCE_ARCS = [50, 100, 150, 200, 250, 300]; // yards
 const M_TO_YARDS = 1.09361;
+const YARDS_TO_METRES = 0.9144;
 
-export default function RangeCanvas({ width, height, trajectory, animationProgress, shotLandings }: RangeCanvasProps) {
+export default function RangeCanvas({ width, height, trajectory, animationProgress, shotLandings, units }: RangeCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const draw = useCallback(() => {
@@ -106,13 +109,14 @@ export default function RangeCanvas({ width, height, trajectory, animationProgre
       ctx.stroke();
 
       // Distance label (on right side)
+      const distLabel = units === 'metric' ? `${Math.round(dist * YARDS_TO_METRES)}` : `${dist}`;
       ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
       ctx.font = '10px "DM Sans", system-ui';
       ctx.textAlign = 'left';
       const labelX = originX + r * 0.7 + 8;
       const labelY = originY - r * 0.7;
       if (labelY > 10 && labelX < width - 20) {
-        ctx.fillText(`${dist}`, labelX, labelY);
+        ctx.fillText(distLabel, labelX, labelY);
       }
     }
 
@@ -231,7 +235,7 @@ export default function RangeCanvas({ width, height, trajectory, animationProgre
     ctx.font = '9px "DM Sans", system-ui';
     ctx.textAlign = 'center';
     ctx.fillText('TEE', originX, originY + 22);
-  }, [width, height, trajectory, animationProgress, shotLandings]);
+  }, [width, height, trajectory, animationProgress, shotLandings, units]);
 
   useEffect(() => {
     draw();

@@ -1,5 +1,6 @@
 import { useRef, useEffect, useCallback } from 'react';
 import type { TrajectoryPoint } from '../engine/physics';
+import type { UnitSystem } from '../data/profile';
 
 interface TrajectoryCanvasProps {
   width: number;
@@ -7,11 +8,13 @@ interface TrajectoryCanvasProps {
   trajectory: TrajectoryPoint[] | null;
   animationProgress: number;
   apex: number; // in yards
+  units: UnitSystem;
 }
 
 const M_TO_YARDS = 1.09361;
+const YARDS_TO_METRES = 0.9144;
 
-export default function TrajectoryCanvas({ width, height, trajectory, animationProgress, apex }: TrajectoryCanvasProps) {
+export default function TrajectoryCanvas({ width, height, trajectory, animationProgress, apex, units }: TrajectoryCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const draw = useCallback(() => {
@@ -140,7 +143,8 @@ export default function TrajectoryCanvas({ width, height, trajectory, animationP
         ctx.fill();
 
         // Label with background
-        const label = `${apex} yds`;
+        const apexDisplay = units === 'metric' ? Math.round(apex * YARDS_TO_METRES) : apex;
+        const label = `${apexDisplay} ${units === 'metric' ? 'm' : 'yds'}`;
         ctx.font = '10px "DM Sans", system-ui';
         ctx.textAlign = 'center';
         const metrics = ctx.measureText(label);
@@ -158,8 +162,8 @@ export default function TrajectoryCanvas({ width, height, trajectory, animationP
     ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
     ctx.font = '9px "DM Sans", system-ui';
     ctx.textAlign = 'center';
-    ctx.fillText('Distance (yards)', width / 2, height - 5);
-  }, [width, height, trajectory, animationProgress, apex]);
+    ctx.fillText(units === 'metric' ? 'Distance (metres)' : 'Distance (yards)', width / 2, height - 5);
+  }, [width, height, trajectory, animationProgress, apex, units]);
 
   useEffect(() => {
     draw();
