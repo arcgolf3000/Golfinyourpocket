@@ -2,7 +2,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { simulate, type ShotResult } from '../engine/physics';
 import { getClub, CLUBS } from '../data/clubs';
 import { loadProfile, saveProfile, type UserProfile, type UnitSystem } from '../data/profile';
-import RangeCanvas from '../canvas/RangeCanvas';
+import RangeCanvas, { type RangeViewType } from '../canvas/RangeCanvas';
 import TrajectoryCanvas from '../canvas/TrajectoryCanvas';
 import PowerMeter from './PowerMeter';
 import ClubSelector from './ClubSelector';
@@ -40,6 +40,7 @@ export default function DrivingRange() {
   const [viewMode, setViewMode] = useState<ViewMode>('simulator');
   const [isRecording, setIsRecording] = useState(false);
   const [swingVideoUrl, setSwingVideoUrl] = useState<string | null>(null);
+  const [rangeViewType, setRangeViewType] = useState<RangeViewType>('ground');
 
   // Persist shots to localStorage
   useEffect(() => {
@@ -168,8 +169,25 @@ export default function DrivingRange() {
 
           {/* Range view */}
           <div className="w-full flex flex-col items-center gap-3">
-            <div className="text-[10px] text-dark-text tracking-widest uppercase text-center">
-              Range View
+            <div className="flex items-center justify-between w-full">
+              <div className="text-[10px] text-dark-text tracking-widest uppercase">
+                Range View
+              </div>
+              <div className="flex rounded-md overflow-hidden border border-dark-border">
+                {(['ground', 'birdseye'] as RangeViewType[]).map((vt) => (
+                  <button
+                    key={vt}
+                    onClick={() => setRangeViewType(vt)}
+                    className={`px-3 py-1 text-[9px] tracking-wider uppercase transition-colors cursor-pointer ${
+                      rangeViewType === vt
+                        ? 'bg-gold/20 text-gold'
+                        : 'bg-dark-card text-dark-text'
+                    }`}
+                  >
+                    {vt === 'ground' ? 'Ground' : "Bird's Eye"}
+                  </button>
+                ))}
+              </div>
             </div>
             <RangeCanvas
               width={dimensions.w}
@@ -178,6 +196,7 @@ export default function DrivingRange() {
               animationProgress={animProgress}
               shotLandings={shotLandings}
               units={units}
+              viewType={rangeViewType}
             />
           </div>
 
