@@ -316,6 +316,13 @@ function drawGroundView(
   ctx.fillStyle = '#38c058'; // fairway green as base
   ctx.fillRect(0, 0, width, height);
 
+  // === DEBUG (top of function, before anything can crash) ===
+  ctx.fillStyle = '#ff0000';
+  ctx.fillRect(5, 5, 15, 15);
+  ctx.font = 'bold 12px monospace';
+  ctx.textAlign = 'left';
+  ctx.fillText(`GV t=${trajectory ? trajectory.length : 'null'} a=${animationProgress.toFixed(2)} hS=${heightScale.toFixed(1)}`, 25, 17);
+
   // === SKY — bright blue like real outdoor range ===
   const skyGrad = ctx.createLinearGradient(0, 0, 0, horizon);
   skyGrad.addColorStop(0, '#1a6bc4');
@@ -505,182 +512,114 @@ function drawGroundView(
   }
 
   // === PREVIOUS LANDINGS ===
-  for (const landing of shotLandings) {
-    const lx = landing.x * M_TO_YARDS;
-    const lz = landing.z * M_TO_YARDS;
-    const lp = projectG(lx, lz);
-    if (!lp || lp.y < horizon) continue;
+  try {
+    for (const landing of shotLandings) {
+      const lx = landing.x * M_TO_YARDS;
+      const lz = landing.z * M_TO_YARDS;
+      const lp = projectG(lx, lz);
+      if (!lp || lp.y < horizon) continue;
 
-    const r = Math.max(2, 4 * lp.scale);
-    ctx.beginPath();
-    ctx.arc(lp.x, lp.y, r, 0, 2 * Math.PI);
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
-    ctx.fill();
+      const r = Math.max(2, 4 * lp.scale);
+      ctx.beginPath();
+      ctx.arc(lp.x, lp.y, r, 0, 2 * Math.PI);
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
+      ctx.fill();
+    }
+  } catch (e) {
+    ctx.fillStyle = '#ff0000';
+    ctx.font = 'bold 11px monospace';
+    ctx.fillText(`LAND ERR: ${e}`, 5, height - 50);
   }
 
   // === PREDICTIVE LANDING ZONE ===
-  if (trajectory && trajectory.length > 2 && animationProgress > 0) {
-    const finalPoint = trajectory[trajectory.length - 1];
-    const landX = finalPoint.x * M_TO_YARDS;
-    const landZ = finalPoint.z * M_TO_YARDS;
-    const landP = projectG(landX, landZ);
+  try {
+    if (trajectory && trajectory.length > 2 && animationProgress > 0) {
+      const finalPoint = trajectory[trajectory.length - 1];
+      const landX = finalPoint.x * M_TO_YARDS;
+      const landZ = finalPoint.z * M_TO_YARDS;
+      const landP = projectG(landX, landZ);
 
-    if (landP && landP.y > horizon) {
-      const pulse = 0.6 + Math.sin(Date.now() * 0.004) * 0.3;
-      const landR = Math.max(4, 10 * landP.scale);
+      if (landP && landP.y > horizon) {
+        const pulse = 0.6 + Math.sin(Date.now() * 0.004) * 0.3;
+        const landR = Math.max(4, 10 * landP.scale);
 
-      // Target circle on ground
-      ctx.strokeStyle = `rgba(255, 220, 50, ${0.5 * pulse})`;
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.arc(landP.x, landP.y, landR, 0, 2 * Math.PI);
-      ctx.stroke();
-
-      ctx.fillStyle = `rgba(255, 220, 50, ${0.12 * pulse})`;
-      ctx.beginPath();
-      ctx.arc(landP.x, landP.y, landR, 0, 2 * Math.PI);
-      ctx.fill();
-
-      // Landing distance label
-      if (animationProgress < 1) {
-        const landDist = units === 'metric'
-          ? `${Math.round(landX * YARDS_TO_METRES)}m`
-          : `${Math.round(landX)} yds`;
-        ctx.font = `bold ${Math.max(9, Math.round(11 * landP.scale))}px "DM Sans", system-ui`;
-        ctx.textAlign = 'center';
-        const tw = ctx.measureText(landDist).width + 10;
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
+        ctx.strokeStyle = `rgba(255, 220, 50, ${0.5 * pulse})`;
+        ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.roundRect(landP.x - tw / 2, landP.y - landR - 20, tw, 16, 3);
+        ctx.arc(landP.x, landP.y, landR, 0, 2 * Math.PI);
+        ctx.stroke();
+
+        ctx.fillStyle = `rgba(255, 220, 50, ${0.12 * pulse})`;
+        ctx.beginPath();
+        ctx.arc(landP.x, landP.y, landR, 0, 2 * Math.PI);
         ctx.fill();
-        ctx.fillStyle = '#ffdd44';
-        ctx.fillText(landDist, landP.x, landP.y - landR - 8);
       }
     }
+  } catch (e) {
+    ctx.fillStyle = '#ff0000';
+    ctx.font = 'bold 11px monospace';
+    ctx.fillText(`ZONE ERR: ${e}`, 5, height - 35);
   }
 
-  // === DEBUG: Always draw a red marker so we know drawing works ===
-  ctx.fillStyle = '#ff0000';
-  ctx.fillRect(10, 10, 12, 12);
-
-  // === DEBUG: Show trajectory info ===
-  ctx.fillStyle = '#ff0000';
-  ctx.font = 'bold 14px monospace';
-  ctx.textAlign = 'left';
-  const tLen = trajectory ? trajectory.length : 0;
-  ctx.fillText(`traj=${tLen} anim=${animationProgress.toFixed(2)}`, 30, 22);
-
   // === BALL FLIGHT ===
-  if (trajectory && trajectory.length > 2 && animationProgress > 0) {
-    const pointCount = Math.floor(trajectory.length * animationProgress);
+  try {
+    if (trajectory && trajectory.length > 2 && animationProgress > 0) {
+      const pointCount = Math.floor(trajectory.length * animationProgress);
 
-    // DEBUG: show pointCount
-    ctx.fillStyle = '#ff0000';
-    ctx.fillText(`pts=${pointCount}`, 30, 38);
-
-    // Build screen points array
-    const screenPts: { x: number; y: number }[] = [];
-    for (let i = 0; i < pointCount; i++) {
-      const p = trajectory[i];
-      const sp = projectH(p.x * M_TO_YARDS, p.y * M_TO_YARDS, p.z * M_TO_YARDS);
-      if (sp) screenPts.push(sp);
-    }
-
-    // DEBUG: show screen points count and first/last coords
-    ctx.fillText(`screenPts=${screenPts.length}`, 30, 54);
-    if (screenPts.length > 0) {
-      ctx.fillText(`first=(${screenPts[0].x.toFixed(0)},${screenPts[0].y.toFixed(0)})`, 30, 70);
-      const last = screenPts[screenPts.length - 1];
-      ctx.fillText(`last=(${last.x.toFixed(0)},${last.y.toFixed(0)})`, 30, 86);
-
-      // DEBUG: Draw big red dots at first and last screen points
+      // DEBUG info
       ctx.fillStyle = '#ff0000';
-      ctx.beginPath();
-      ctx.arc(screenPts[0].x, screenPts[0].y, 10, 0, 2 * Math.PI);
-      ctx.fill();
+      ctx.font = 'bold 12px monospace';
+      ctx.textAlign = 'left';
+      ctx.fillText(`pts=${pointCount} len=${trajectory.length}`, 5, 35);
 
-      ctx.fillStyle = '#00ff00';
-      ctx.beginPath();
-      ctx.arc(last.x, last.y, 10, 0, 2 * Math.PI);
-      ctx.fill();
-    }
-
-    // DEBUG: also show raw trajectory point values
-    if (pointCount > 0) {
-      const p0 = trajectory[0];
-      const pLast = trajectory[Math.min(pointCount - 1, trajectory.length - 1)];
-      ctx.fillStyle = '#ff0000';
-      ctx.fillText(`raw0=(${(p0.x*M_TO_YARDS).toFixed(1)},${(p0.y*M_TO_YARDS).toFixed(1)},${(p0.z*M_TO_YARDS).toFixed(1)})`, 30, 102);
-      ctx.fillText(`rawN=(${(pLast.x*M_TO_YARDS).toFixed(1)},${(pLast.y*M_TO_YARDS).toFixed(1)},${(pLast.z*M_TO_YARDS).toFixed(1)})`, 30, 118);
-    }
-
-    if (screenPts.length > 1) {
-      // Thick yellow outer trail
-      ctx.save();
-      ctx.strokeStyle = '#ffee44';
-      ctx.lineWidth = 4;
-      ctx.lineJoin = 'round';
-      ctx.lineCap = 'round';
-      ctx.globalAlpha = 0.5;
-      ctx.beginPath();
-      ctx.moveTo(screenPts[0].x, screenPts[0].y);
-      for (let i = 1; i < screenPts.length; i++) {
-        ctx.lineTo(screenPts[i].x, screenPts[i].y);
+      // Build screen points array
+      const screenPts: { x: number; y: number }[] = [];
+      for (let i = 0; i < pointCount; i++) {
+        const p = trajectory[i];
+        const sp = projectH(p.x * M_TO_YARDS, p.y * M_TO_YARDS, p.z * M_TO_YARDS);
+        if (sp) screenPts.push(sp);
       }
-      ctx.stroke();
-      ctx.restore();
 
-      // Bright white inner trail
-      ctx.save();
-      ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = 2;
-      ctx.lineJoin = 'round';
-      ctx.lineCap = 'round';
-      ctx.beginPath();
-      ctx.moveTo(screenPts[0].x, screenPts[0].y);
-      for (let i = 1; i < screenPts.length; i++) {
-        ctx.lineTo(screenPts[i].x, screenPts[i].y);
+      ctx.fillText(`scrPts=${screenPts.length}`, 5, 50);
+
+      // Draw each point as an individual dot (most compatible rendering)
+      for (let i = 0; i < screenPts.length; i++) {
+        const alpha = 0.3 + (i / screenPts.length) * 0.7;
+        const size = 2 + (i / screenPts.length) * 2;
+        ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+        ctx.fillRect(screenPts[i].x - size / 2, screenPts[i].y - size / 2, size, size);
       }
-      ctx.stroke();
-      ctx.restore();
 
-      // Vertical line at landing
-      if (animationProgress >= 1) {
-        const lastPt = screenPts[screenPts.length - 1];
-        const finalP = trajectory[trajectory.length - 1];
-        const landGnd = projectG(finalP.x * M_TO_YARDS, finalP.z * M_TO_YARDS);
-        if (landGnd) {
-          ctx.strokeStyle = '#ffee44';
-          ctx.lineWidth = 2;
-          ctx.beginPath();
-          ctx.moveTo(landGnd.x, landGnd.y);
-          ctx.lineTo(lastPt.x, lastPt.y - 10);
-          ctx.stroke();
+      // Current ball position
+      if (screenPts.length > 0) {
+        const ballPos = screenPts[screenPts.length - 1];
+
+        // Big bright ball
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(ballPos.x - 6, ballPos.y - 6, 12, 12);
+
+        // Yellow outline
+        ctx.strokeStyle = '#ffee44';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(ballPos.x - 7, ballPos.y - 7, 14, 14);
+
+        ctx.fillText(`ball=(${ballPos.x.toFixed(0)},${ballPos.y.toFixed(0)})`, 5, 65);
+
+        // Vertical line from ball to ground (use fillRect instead of stroke)
+        const currP = trajectory[Math.min(pointCount - 1, trajectory.length - 1)];
+        const groundPt = projectG(currP.x * M_TO_YARDS, currP.z * M_TO_YARDS);
+        if (groundPt && currP.y * M_TO_YARDS > 0.5) {
+          const topY = Math.min(ballPos.y, groundPt.y);
+          const botY = Math.max(ballPos.y, groundPt.y);
+          ctx.fillStyle = 'rgba(255, 238, 68, 0.4)';
+          ctx.fillRect(ballPos.x - 0.5, topY, 1, botY - topY);
         }
       }
-
-      // Current ball position (big white dot)
-      const ballPos = screenPts[screenPts.length - 1];
-      ctx.beginPath();
-      ctx.arc(ballPos.x, ballPos.y, 6, 0, 2 * Math.PI);
-      ctx.fillStyle = '#ffffff';
-      ctx.fill();
-      ctx.strokeStyle = '#ffee44';
-      ctx.lineWidth = 2;
-      ctx.stroke();
-
-      // Vertical line from ball to ground
-      const currP = trajectory[Math.min(pointCount - 1, trajectory.length - 1)];
-      const groundPt = projectG(currP.x * M_TO_YARDS, currP.z * M_TO_YARDS);
-      if (groundPt && currP.y * M_TO_YARDS > 0.5) {
-        ctx.strokeStyle = 'rgba(255, 238, 68, 0.4)';
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(ballPos.x, ballPos.y);
-        ctx.lineTo(groundPt.x, groundPt.y);
-        ctx.stroke();
-      }
     }
+  } catch (e) {
+    ctx.fillStyle = '#ff0000';
+    ctx.font = 'bold 11px monospace';
+    ctx.fillText(`FLIGHT ERR: ${e}`, 5, height - 20);
   }
 }
 
