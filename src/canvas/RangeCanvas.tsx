@@ -18,26 +18,6 @@ const DISTANCE_MARKERS = [50, 100, 150, 200, 250, 300]; // yards
 const M_TO_YARDS = 1.09361;
 const YARDS_TO_METRES = 0.9144;
 
-// Perspective projection for ground view
-function project(
-  forwardYards: number,
-  heightYards: number,
-  lateralYards: number,
-  width: number,
-  height: number,
-  horizon: number,
-  focalLength: number,
-): { x: number; y: number; scale: number } | null {
-  const depth = forwardYards + focalLength;
-  if (depth <= 0) return null;
-  const scale = focalLength / depth;
-  const cx = width / 2;
-  const groundY = height - 40;
-  const screenX = cx + lateralYards * scale * 3.5;
-  const screenY = groundY - (groundY - horizon) * (1 - scale) - heightYards * scale * 3.5;
-  return { x: screenX, y: screenY, scale };
-}
-
 // ==================== BIRDS-EYE (TOP-DOWN) VIEW ====================
 function drawBirdsEye(
   ctx: CanvasRenderingContext2D,
@@ -283,6 +263,31 @@ function drawBirdsEye(
 }
 
 // ==================== GROUND-LEVEL (PERSPECTIVE) VIEW ====================
+// Separate projection for ground view — ball height uses a much bigger multiplier
+// so the ball arcs HIGH into the sky like the Impact Vision reference
+function projectGround(
+  forwardYards: number,
+  heightYards: number,
+  lateralYards: number,
+  width: number,
+  height: number,
+  horizon: number,
+  groundY: number,
+  focalLength: number,
+): { x: number; y: number; scale: number } | null {
+  const depth = forwardYards + focalLength;
+  if (depth <= 0) return null;
+  const scale = focalLength / depth;
+  const cx = width / 2;
+  // Ground position (no height)
+  const gndY = groundY - (groundY - horizon) * (1 - scale);
+  // Height offset: multiply strongly so ball goes into sky
+  const heightPx = heightYards * (height * 0.012) * (0.3 + scale * 0.7);
+  const screenX = cx + lateralYards * scale * 3.5;
+  const screenY = gndY - heightPx;
+  return { x: screenX, y: screenY, scale };
+}
+
 function drawGroundView(
   ctx: CanvasRenderingContext2D,
   width: number,
@@ -292,111 +297,126 @@ function drawGroundView(
   shotLandings: Array<{ x: number; z: number; club: string }>,
   units: UnitSystem,
 ) {
-  const horizon = height * 0.30;
-  const groundY = height - 40;
+  // More sky visible — horizon at 55% from top so ball has room to fly
+  const horizon = height * 0.55;
+  const groundY = height - 24;
   const focalLength = 60;
 
-  // === SKY with realistic gradient ===
-  const skyGrad = ctx.createLinearGradient(0, 0, 0, horizon + 30);
-  skyGrad.addColorStop(0, '#0b1a30');
-  skyGrad.addColorStop(0.15, '#0f2845');
-  skyGrad.addColorStop(0.4, '#1a4065');
-  skyGrad.addColorStop(0.65, '#2a5a80');
-  skyGrad.addColorStop(0.85, '#4a7a9a');
-  skyGrad.addColorStop(1, '#6a9ab5');
-  ctx.fillStyle = skyGrad;
-  ctx.fillRect(0, 0, width, horizon + 30);
+  // Helper for ground-only projection (height=0)
+  const projectG = (fwd: number, lat: number) =>
+    projectGround(fwd, 0, lat, width, height, horizon, groundY, focalLength);
+  const projectH = (fwd: number, h: number, lat: number) =>
+    projectGround(fwd, h, lat, width, height, horizon, groundY, focalLength);
 
-  // Clouds
+  // === SKY — bright blue like real outdoor range ===
+  const skyGrad = ctx.createLinearGradient(0, 0, 0, horizon);
+  skyGrad.addColorStop(0, '#1a6bc4');
+  skyGrad.addColorStop(0.25, '#2b80d4');
+  skyGrad.addColorStop(0.5, '#4a9ae0');
+  skyGrad.addColorStop(0.75, '#6db8ec');
+  skyGrad.addColorStop(0.9, '#8ecdf2');
+  skyGrad.addColorStop(1, '#b0dff8');
+  ctx.fillStyle = skyGrad;
+  ctx.fillRect(0, 0, width, horizon);
+
+  // === CLOUDS ===
   const drawCloud = (cx: number, cy: number, size: number, alpha: number) => {
-    ctx.fillStyle = `rgba(200, 220, 240, ${alpha})`;
-    for (const [ox, oy, r] of [
+    ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+    const blobs: [number, number, number][] = [
       [0, 0, size],
-      [-size * 0.7, size * 0.1, size * 0.65],
-      [size * 0.6, size * 0.15, size * 0.55],
-      [-size * 0.3, -size * 0.3, size * 0.5],
-      [size * 0.35, -size * 0.25, size * 0.45],
-    ]) {
+      [-size * 0.8, size * 0.1, size * 0.6],
+      [size * 0.7, size * 0.12, size * 0.55],
+      [-size * 0.35, -size * 0.35, size * 0.55],
+      [size * 0.4, -size * 0.3, size * 0.5],
+      [-size * 1.2, size * 0.2, size * 0.4],
+      [size * 1.1, size * 0.15, size * 0.35],
+    ];
+    for (const [ox, oy, r] of blobs) {
       ctx.beginPath();
       ctx.arc(cx + ox, cy + oy, r, 0, 2 * Math.PI);
       ctx.fill();
     }
   };
-  drawCloud(width * 0.2, horizon * 0.25, 12, 0.06);
-  drawCloud(width * 0.65, horizon * 0.35, 16, 0.05);
-  drawCloud(width * 0.85, horizon * 0.18, 10, 0.04);
-  drawCloud(width * 0.42, horizon * 0.5, 14, 0.04);
+  drawCloud(width * 0.15, horizon * 0.18, 18, 0.35);
+  drawCloud(width * 0.55, horizon * 0.12, 22, 0.3);
+  drawCloud(width * 0.82, horizon * 0.25, 15, 0.25);
+  drawCloud(width * 0.35, horizon * 0.38, 20, 0.2);
+  drawCloud(width * 0.7, horizon * 0.45, 16, 0.15);
 
-  // Haze near horizon
-  const hazeGrad = ctx.createLinearGradient(0, horizon - 20, 0, horizon + 20);
-  hazeGrad.addColorStop(0, 'rgba(106, 154, 181, 0)');
-  hazeGrad.addColorStop(0.5, 'rgba(106, 154, 181, 0.15)');
-  hazeGrad.addColorStop(1, 'rgba(106, 154, 181, 0)');
-  ctx.fillStyle = hazeGrad;
-  ctx.fillRect(0, horizon - 20, width, 40);
+  // === MOUNTAINS ===
+  // Far mountain range (bluish/hazy)
+  ctx.fillStyle = '#5a8aaa';
+  ctx.beginPath();
+  ctx.moveTo(0, horizon);
+  for (let x = 0; x <= width; x += 3) {
+    const mh = Math.sin(x * 0.008) * 30 + Math.sin(x * 0.02) * 15 + Math.cos(x * 0.005) * 20 + 35;
+    ctx.lineTo(x, horizon - mh);
+  }
+  ctx.lineTo(width, horizon);
+  ctx.closePath();
+  ctx.fill();
 
-  // === FAIRWAY ===
+  // Near mountain range (darker, greener)
+  ctx.fillStyle = '#3d6a4a';
+  ctx.beginPath();
+  ctx.moveTo(0, horizon);
+  for (let x = 0; x <= width; x += 3) {
+    const mh = Math.sin(x * 0.012 + 1) * 18 + Math.sin(x * 0.03) * 10 + Math.cos(x * 0.007 + 2) * 12 + 20;
+    ctx.lineTo(x, horizon - mh);
+  }
+  ctx.lineTo(width, horizon);
+  ctx.closePath();
+  ctx.fill();
+
+  // === TREE LINE at horizon ===
+  ctx.fillStyle = '#1a4a28';
+  for (let tx = 0; tx < width; tx += 10) {
+    const th = 5 + Math.sin(tx * 0.25) * 3 + Math.cos(tx * 0.15) * 2 + Math.sin(tx * 0.08) * 2;
+    ctx.beginPath();
+    ctx.arc(tx, horizon, th, Math.PI, 0);
+    ctx.fill();
+  }
+  // Tree highlights
+  ctx.fillStyle = '#246633';
+  for (let tx = 4; tx < width; tx += 16) {
+    const th = 2.5 + Math.sin(tx * 0.35) * 1.5;
+    ctx.beginPath();
+    ctx.arc(tx, horizon - 2, th, Math.PI, 0);
+    ctx.fill();
+  }
+
+  // === FAIRWAY — bright vivid green ===
   const fairwayGrad = ctx.createLinearGradient(0, horizon, 0, height);
-  fairwayGrad.addColorStop(0, '#0e3d1c');
-  fairwayGrad.addColorStop(0.2, '#14522e');
-  fairwayGrad.addColorStop(0.5, '#1a6b38');
-  fairwayGrad.addColorStop(0.8, '#1e7a40');
-  fairwayGrad.addColorStop(1, '#22884a');
+  fairwayGrad.addColorStop(0, '#1a6630');
+  fairwayGrad.addColorStop(0.15, '#208838');
+  fairwayGrad.addColorStop(0.4, '#28a045');
+  fairwayGrad.addColorStop(0.7, '#30b050');
+  fairwayGrad.addColorStop(1, '#38c058');
   ctx.fillStyle = fairwayGrad;
   ctx.fillRect(0, horizon, width, height - horizon);
 
-  // Tree line at horizon
-  ctx.fillStyle = '#0b2e15';
-  for (let tx = 0; tx < width; tx += 14) {
-    const th = 6 + Math.sin(tx * 0.25) * 3 + Math.cos(tx * 0.13) * 2.5 + Math.sin(tx * 0.07) * 2;
-    ctx.beginPath();
-    ctx.arc(tx, horizon + 1, th, Math.PI, 0);
-    ctx.fill();
-  }
-  // Lighter tree highlights
-  ctx.fillStyle = '#0f3b1a';
-  for (let tx = 5; tx < width; tx += 22) {
-    const th = 3 + Math.sin(tx * 0.4) * 2;
-    ctx.beginPath();
-    ctx.arc(tx, horizon - 1, th, Math.PI, 0);
-    ctx.fill();
-  }
-
   // Mowing stripes
-  for (let d = 10; d < 320; d += 15) {
-    const p = project(d, 0, 0, width, height, horizon, focalLength);
+  for (let d = 10; d < 320; d += 12) {
+    const p = projectG(d, 0);
     if (!p || p.y < horizon) continue;
-    const stripe = project(d + 7, 0, 0, width, height, horizon, focalLength);
+    const stripe = projectG(d + 6, 0);
     if (!stripe) continue;
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.02)';
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.03)';
     ctx.fillRect(0, p.y, width, stripe.y - p.y);
-  }
-
-  // Perspective lane lines
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.04)';
-  ctx.lineWidth = 1;
-  for (const offset of [-40, -20, 20, 40]) {
-    const start = project(0, 0, offset, width, height, horizon, focalLength);
-    const end = project(300, 0, offset, width, height, horizon, focalLength);
-    if (start && end) {
-      ctx.beginPath();
-      ctx.moveTo(start.x, start.y);
-      ctx.lineTo(end.x, end.y);
-      ctx.stroke();
-    }
   }
 
   // === DISTANCE MARKERS & FLAGS ===
   for (const dist of DISTANCE_MARKERS) {
-    const p = project(dist, 0, 0, width, height, horizon, focalLength);
-    if (!p || p.y < horizon + 5) continue;
+    const p = projectG(dist, 0);
+    if (!p || p.y < horizon + 3) continue;
 
-    const pLeft = project(dist, 0, -50, width, height, horizon, focalLength);
-    const pRight = project(dist, 0, 50, width, height, horizon, focalLength);
+    // Distance line
+    const pLeft = projectG(dist, -50);
+    const pRight = projectG(dist, 50);
     if (pLeft && pRight) {
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.06)';
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
       ctx.lineWidth = 1;
-      ctx.setLineDash([4, 4]);
+      ctx.setLineDash([4, 6]);
       ctx.beginPath();
       ctx.moveTo(pLeft.x, pLeft.y);
       ctx.lineTo(pRight.x, pRight.y);
@@ -404,90 +424,90 @@ function drawGroundView(
       ctx.setLineDash([]);
     }
 
+    // Target green
     const greenR = Math.max(3, 14 * p.scale);
     const greenGrad = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, greenR);
-    greenGrad.addColorStop(0, 'rgba(34, 180, 34, 0.6)');
-    greenGrad.addColorStop(0.6, 'rgba(34, 139, 34, 0.3)');
+    greenGrad.addColorStop(0, 'rgba(34, 200, 34, 0.5)');
+    greenGrad.addColorStop(0.6, 'rgba(34, 160, 34, 0.25)');
     greenGrad.addColorStop(1, 'rgba(34, 139, 34, 0)');
     ctx.beginPath();
     ctx.arc(p.x, p.y, greenR, 0, 2 * Math.PI);
     ctx.fillStyle = greenGrad;
     ctx.fill();
 
-    const flagHeight = Math.max(4, 14 * p.scale);
-    ctx.strokeStyle = `rgba(255, 255, 255, ${0.3 + p.scale * 0.4})`;
+    // Flag pin
+    const flagHeight = Math.max(5, 16 * p.scale);
+    ctx.strokeStyle = `rgba(255, 255, 255, ${0.4 + p.scale * 0.4})`;
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.moveTo(p.x, p.y);
     ctx.lineTo(p.x, p.y - flagHeight);
     ctx.stroke();
 
-    ctx.fillStyle = dist <= 150 ? 'rgba(255, 80, 80, 0.8)' : 'rgba(255, 200, 50, 0.7)';
+    ctx.fillStyle = dist <= 150 ? '#ee4444' : '#eecc33';
     ctx.beginPath();
     ctx.moveTo(p.x, p.y - flagHeight);
-    ctx.lineTo(p.x + 4 * p.scale + 2, p.y - flagHeight + 2);
-    ctx.lineTo(p.x, p.y - flagHeight + 4);
+    ctx.lineTo(p.x + Math.max(3, 5 * p.scale), p.y - flagHeight + 2.5);
+    ctx.lineTo(p.x, p.y - flagHeight + 5);
     ctx.closePath();
     ctx.fill();
 
+    // Distance label
     const distLabel = units === 'metric' ? `${Math.round(dist * YARDS_TO_METRES)}m` : `${dist}`;
-    ctx.fillStyle = `rgba(255, 255, 255, ${0.25 + p.scale * 0.3})`;
-    ctx.font = `${Math.max(8, Math.round(11 * p.scale))}px "DM Sans", system-ui`;
+    ctx.fillStyle = `rgba(255, 255, 255, ${0.35 + p.scale * 0.35})`;
+    ctx.font = `bold ${Math.max(8, Math.round(11 * p.scale))}px "DM Sans", system-ui`;
     ctx.textAlign = 'right';
-    const labelP = project(dist, 0, 30, width, height, horizon, focalLength);
+    const labelP = projectG(dist, 25);
     if (labelP && labelP.x < width - 5) {
       ctx.fillText(distLabel, labelP.x, labelP.y - 2);
     }
   }
 
-  // === TEE BOX ===
-  const teeW = 44, teeH = 14;
+  // === TEE AREA (bottom of screen) ===
+  const teeW = 50, teeH = 10;
   const teeGrad = ctx.createLinearGradient(
-    width / 2 - teeW / 2, groundY - teeH / 2,
-    width / 2 + teeW / 2, groundY + teeH / 2,
+    width / 2 - teeW / 2, groundY - teeH,
+    width / 2 + teeW / 2, groundY,
   );
-  teeGrad.addColorStop(0, '#2d8a4e');
-  teeGrad.addColorStop(1, '#1f6b38');
+  teeGrad.addColorStop(0, '#35a855');
+  teeGrad.addColorStop(1, '#2a9048');
   ctx.fillStyle = teeGrad;
   ctx.beginPath();
-  ctx.roundRect(width / 2 - teeW / 2, groundY - teeH / 2, teeW, teeH, 4);
+  ctx.roundRect(width / 2 - teeW / 2, groundY - teeH, teeW, teeH, 3);
   ctx.fill();
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.roundRect(width / 2 - teeW / 2, groundY - teeH / 2, teeW, teeH, 4);
-  ctx.stroke();
 
+  // Tee markers
   ctx.fillStyle = '#ffcc33';
   ctx.beginPath();
-  ctx.arc(width / 2 - 10, groundY, 3, 0, 2 * Math.PI);
+  ctx.arc(width / 2 - 10, groundY - teeH / 2, 2.5, 0, 2 * Math.PI);
   ctx.fill();
   ctx.beginPath();
-  ctx.arc(width / 2 + 10, groundY, 3, 0, 2 * Math.PI);
+  ctx.arc(width / 2 + 10, groundY - teeH / 2, 2.5, 0, 2 * Math.PI);
   ctx.fill();
 
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
-  ctx.font = '9px "DM Sans", system-ui';
-  ctx.textAlign = 'center';
-  ctx.fillText('TEE', width / 2, groundY + 20);
+  // Ball on tee (when no shot in progress)
+  if (!trajectory || animationProgress === 0) {
+    ctx.beginPath();
+    ctx.arc(width / 2, groundY - teeH - 4, 4, 0, 2 * Math.PI);
+    ctx.fillStyle = '#ffffff';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(0,0,0,0.1)';
+    ctx.lineWidth = 0.5;
+    ctx.stroke();
+  }
 
   // === PREVIOUS LANDINGS ===
   for (const landing of shotLandings) {
     const lx = landing.x * M_TO_YARDS;
     const lz = landing.z * M_TO_YARDS;
-    const lp = project(lx, 0, lz, width, height, horizon, focalLength);
+    const lp = projectG(lx, lz);
     if (!lp || lp.y < horizon) continue;
 
     const r = Math.max(2, 4 * lp.scale);
     ctx.beginPath();
     ctx.arc(lp.x, lp.y, r, 0, 2 * Math.PI);
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
     ctx.fill();
-    ctx.beginPath();
-    ctx.arc(lp.x, lp.y, r * 2, 0, 2 * Math.PI);
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
-    ctx.lineWidth = 1;
-    ctx.stroke();
   }
 
   // === PREDICTIVE LANDING ZONE ===
@@ -495,144 +515,126 @@ function drawGroundView(
     const finalPoint = trajectory[trajectory.length - 1];
     const landX = finalPoint.x * M_TO_YARDS;
     const landZ = finalPoint.z * M_TO_YARDS;
-    const landP = project(landX, 0, landZ, width, height, horizon, focalLength);
+    const landP = projectG(landX, landZ);
 
     if (landP && landP.y > horizon) {
       const pulse = 0.6 + Math.sin(Date.now() * 0.004) * 0.3;
-      const landR = Math.max(4, 12 * landP.scale);
+      const landR = Math.max(4, 10 * landP.scale);
 
-      ctx.strokeStyle = `rgba(255, 204, 51, ${0.3 * pulse})`;
+      // Target circle on ground
+      ctx.strokeStyle = `rgba(255, 220, 50, ${0.5 * pulse})`;
       ctx.lineWidth = 2;
-      ctx.setLineDash([3, 3]);
-      ctx.beginPath();
-      ctx.arc(landP.x, landP.y, landR * 2, 0, 2 * Math.PI);
-      ctx.stroke();
-      ctx.setLineDash([]);
-
       ctx.beginPath();
       ctx.arc(landP.x, landP.y, landR, 0, 2 * Math.PI);
-      ctx.fillStyle = `rgba(255, 204, 51, ${0.15 * pulse})`;
-      ctx.fill();
-      ctx.strokeStyle = `rgba(255, 204, 51, ${0.6 * pulse})`;
-      ctx.lineWidth = 1.5;
       ctx.stroke();
 
+      ctx.fillStyle = `rgba(255, 220, 50, ${0.12 * pulse})`;
+      ctx.beginPath();
+      ctx.arc(landP.x, landP.y, landR, 0, 2 * Math.PI);
+      ctx.fill();
+
+      // Landing distance label
       if (animationProgress < 1) {
         const landDist = units === 'metric'
           ? `${Math.round(landX * YARDS_TO_METRES)}m`
           : `${Math.round(landX)} yds`;
-        ctx.font = `${Math.max(9, Math.round(11 * landP.scale))}px "DM Sans", system-ui`;
+        ctx.font = `bold ${Math.max(9, Math.round(11 * landP.scale))}px "DM Sans", system-ui`;
         ctx.textAlign = 'center';
         const tw = ctx.measureText(landDist).width + 10;
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
         ctx.beginPath();
-        ctx.roundRect(landP.x - tw / 2, landP.y - landR * 2 - 18, tw, 16, 3);
+        ctx.roundRect(landP.x - tw / 2, landP.y - landR - 20, tw, 16, 3);
         ctx.fill();
-        ctx.fillStyle = '#ffcc33';
-        ctx.fillText(landDist, landP.x, landP.y - landR * 2 - 6);
+        ctx.fillStyle = '#ffdd44';
+        ctx.fillText(landDist, landP.x, landP.y - landR - 8);
       }
     }
   }
 
-  // === BALL FLIGHT (3D in sky) ===
+  // === BALL FLIGHT — thin yellow/lime lines like Impact Vision ===
   if (trajectory && animationProgress > 0) {
     const pointCount = Math.floor(trajectory.length * animationProgress);
 
-    // Trail
     if (pointCount > 1) {
-      // Ground shadow trail
-      ctx.beginPath();
-      ctx.strokeStyle = 'rgba(0, 0, 0, 0.10)';
-      ctx.lineWidth = 1.5;
-      for (let i = 0; i < pointCount; i++) {
-        const p = trajectory[i];
-        const sp = project(p.x * M_TO_YARDS, 0, p.z * M_TO_YARDS, width, height, horizon, focalLength);
-        if (!sp) continue;
-        if (i === 0) ctx.moveTo(sp.x, sp.y);
-        else ctx.lineTo(sp.x, sp.y);
-      }
-      ctx.stroke();
-
-      // Ball trail (Toptracer gradient red → gold → white)
+      // Thin yellow-green ball trail (like reference image)
+      ctx.shadowColor = 'rgba(200, 255, 50, 0.3)';
+      ctx.shadowBlur = 4;
       for (let i = 1; i < pointCount; i++) {
         const p = trajectory[i];
         const prev = trajectory[i - 1];
-        const pp = project(p.x * M_TO_YARDS, p.y * M_TO_YARDS, p.z * M_TO_YARDS, width, height, horizon, focalLength);
-        const prevP = project(prev.x * M_TO_YARDS, prev.y * M_TO_YARDS, prev.z * M_TO_YARDS, width, height, horizon, focalLength);
+        const pp = projectH(p.x * M_TO_YARDS, p.y * M_TO_YARDS, p.z * M_TO_YARDS);
+        const prevP = projectH(prev.x * M_TO_YARDS, prev.y * M_TO_YARDS, prev.z * M_TO_YARDS);
         if (!pp || !prevP) continue;
 
-        const t = i / trajectory.length;
-        const r = 255;
-        const g = Math.round(80 + t * 175);
-        const b = Math.round(t > 0.6 ? (t - 0.6) / 0.4 * 180 : 30);
-        const alpha = 0.15 + (i / pointCount) * 0.55;
-
+        const alpha = 0.3 + (i / pointCount) * 0.5;
         ctx.beginPath();
-        ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${alpha})`;
-        ctx.lineWidth = Math.max(1.5, 2.5 * pp.scale);
+        ctx.strokeStyle = `rgba(210, 255, 60, ${alpha})`;
+        ctx.lineWidth = 1.5;
         ctx.moveTo(prevP.x, prevP.y);
         ctx.lineTo(pp.x, pp.y);
         ctx.stroke();
+      }
+      ctx.shadowBlur = 0;
+
+      // Vertical yellow line at landing point
+      if (animationProgress >= 1) {
+        const finalP = trajectory[trajectory.length - 1];
+        const landScreen = projectG(finalP.x * M_TO_YARDS, finalP.z * M_TO_YARDS);
+        const ballTop = projectH(finalP.x * M_TO_YARDS, 5, finalP.z * M_TO_YARDS);
+        if (landScreen && ballTop) {
+          ctx.strokeStyle = 'rgba(220, 255, 60, 0.5)';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(landScreen.x, landScreen.y);
+          ctx.lineTo(ballTop.x, ballTop.y);
+          ctx.stroke();
+        }
       }
     }
 
     // Current ball
     if (pointCount > 0 && pointCount <= trajectory.length) {
       const current = trajectory[Math.min(pointCount - 1, trajectory.length - 1)];
-      const bp = project(
-        current.x * M_TO_YARDS,
-        current.y * M_TO_YARDS,
-        current.z * M_TO_YARDS,
-        width, height, horizon, focalLength,
-      );
+      const bp = projectH(current.x * M_TO_YARDS, current.y * M_TO_YARDS, current.z * M_TO_YARDS);
       if (bp) {
-        const ballSize = Math.max(3, 7 * bp.scale);
-        const isInSky = bp.y < horizon + 30;
+        const ballSize = Math.max(3.5, 6 * bp.scale);
 
-        // Large outer glow (brighter when ball is in sky area)
-        const glowR = ballSize * (isInSky ? 6 : 4);
-        const glow = ctx.createRadialGradient(bp.x, bp.y, 0, bp.x, bp.y, glowR);
-        glow.addColorStop(0, `rgba(255, 255, 255, ${isInSky ? 1 : 0.8})`);
-        glow.addColorStop(0.15, `rgba(255, 240, 200, ${isInSky ? 0.6 : 0.35})`);
-        glow.addColorStop(0.4, `rgba(255, 204, 51, ${isInSky ? 0.2 : 0.1})`);
-        glow.addColorStop(1, 'rgba(255, 204, 51, 0)');
-        ctx.beginPath();
-        ctx.arc(bp.x, bp.y, glowR, 0, 2 * Math.PI);
-        ctx.fillStyle = glow;
-        ctx.fill();
-
-        // Ball (white with subtle shading)
-        const ballGrad = ctx.createRadialGradient(
-          bp.x - ballSize * 0.3, bp.y - ballSize * 0.3, 0,
-          bp.x, bp.y, ballSize,
-        );
-        ballGrad.addColorStop(0, '#ffffff');
-        ballGrad.addColorStop(0.7, '#f0f0f0');
-        ballGrad.addColorStop(1, '#d0d0d0');
-        ctx.beginPath();
-        ctx.arc(bp.x, bp.y, ballSize, 0, 2 * Math.PI);
-        ctx.fillStyle = ballGrad;
-        ctx.fill();
-
-        // Vertical dashed line to ground shadow
-        const shadowP = project(current.x * M_TO_YARDS, 0, current.z * M_TO_YARDS, width, height, horizon, focalLength);
-        if (shadowP && current.y * M_TO_YARDS > 3) {
-          ctx.strokeStyle = 'rgba(255, 204, 51, 0.12)';
+        // Vertical line from ball down to ground
+        const shadowP = projectG(current.x * M_TO_YARDS, current.z * M_TO_YARDS);
+        if (shadowP && current.y * M_TO_YARDS > 2) {
+          ctx.strokeStyle = 'rgba(220, 255, 60, 0.3)';
           ctx.lineWidth = 1;
-          ctx.setLineDash([2, 3]);
           ctx.beginPath();
           ctx.moveTo(bp.x, bp.y);
           ctx.lineTo(shadowP.x, shadowP.y);
           ctx.stroke();
-          ctx.setLineDash([]);
 
-          // Shadow circle on ground
-          const shadowSize = Math.max(2, 4 * shadowP.scale);
+          // Ground shadow
+          const sr = Math.max(2, 3 * shadowP.scale);
           ctx.beginPath();
-          ctx.arc(shadowP.x, shadowP.y, shadowSize, 0, 2 * Math.PI);
-          ctx.fillStyle = 'rgba(0, 0, 0, 0.15)';
+          ctx.arc(shadowP.x, shadowP.y, sr, 0, 2 * Math.PI);
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.12)';
           ctx.fill();
         }
+
+        // Ball glow
+        const glow = ctx.createRadialGradient(bp.x, bp.y, 0, bp.x, bp.y, ballSize * 3);
+        glow.addColorStop(0, 'rgba(255, 255, 255, 0.9)');
+        glow.addColorStop(0.3, 'rgba(220, 255, 100, 0.3)');
+        glow.addColorStop(1, 'rgba(220, 255, 100, 0)');
+        ctx.beginPath();
+        ctx.arc(bp.x, bp.y, ballSize * 3, 0, 2 * Math.PI);
+        ctx.fillStyle = glow;
+        ctx.fill();
+
+        // Ball
+        ctx.beginPath();
+        ctx.arc(bp.x, bp.y, ballSize, 0, 2 * Math.PI);
+        ctx.fillStyle = '#ffffff';
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(0,0,0,0.15)';
+        ctx.lineWidth = 0.5;
+        ctx.stroke();
       }
     }
   }
