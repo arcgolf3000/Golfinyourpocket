@@ -1,6 +1,7 @@
 import { useRef, useEffect, useCallback } from 'react';
 import type { TrajectoryPoint } from '../engine/physics';
 import type { UnitSystem } from '../data/profile';
+import { createProjectionConfig, projectGround, projectBall, computeHeightScale } from '../engine/projection';
 
 export type RangeViewType = 'ground' | 'birdseye';
 
@@ -273,44 +274,18 @@ function drawGroundView(
   shotLandings: Array<{ x: number; z: number; club: string }>,
   units: UnitSystem,
 ) {
-  const horizon = height * 0.35;
-  const groundY = height - 16;
-  const focalLength = 60;
+  const projConfig = createProjectionConfig(width, height);
+  const horizon = projConfig.horizon;
+  const groundY = projConfig.groundY;
 
-  // --- Projection helpers ---
-  // Ground projection (no height component)
-  const projectG = (fwd: number, lat: number): { x: number; y: number; scale: number } | null => {
-    const depth = fwd + focalLength;
-    if (depth <= 0) return null;
-    const scale = focalLength / depth;
-    const gndY = groundY - (groundY - horizon) * (1 - scale);
-    return { x: width / 2 + lat * scale * 3.5, y: gndY, scale };
-  };
+  // Shorthand projection helpers using extracted utilities
+  const projectG = (fwd: number, lat: number) => projectGround(projConfig, fwd, lat);
 
-  // Ball projection with dynamic height scaling
-  // Compute maxApex from trajectory so the apex always reaches ~15% from top
-  let heightScale = 1;
-  if (trajectory && trajectory.length > 2) {
-    const maxH = Math.max(...trajectory.map(p => p.y)) * M_TO_YARDS;
-    // Find where the apex point lands on the ground (to get its gndY)
-    const apexPt = trajectory.reduce((m, p) => p.y > m.y ? p : m, trajectory[0]);
-    const apexFwd = apexPt.x * M_TO_YARDS;
-    const apexGnd = projectG(apexFwd, 0);
-    if (apexGnd && maxH > 0) {
-      // We want the apex to reach screen y = height * 0.08 (near top, in sky)
-      const targetScreenY = height * 0.08;
-      const availablePx = apexGnd.y - targetScreenY;
-      heightScale = availablePx / maxH;
-    }
-  }
-  // Ensure minimum scale so even tiny shots show a visible arc
-  heightScale = Math.max(heightScale, 2);
+  const heightScale = trajectory && trajectory.length > 2
+    ? computeHeightScale(projConfig, trajectory)
+    : 2;
 
-  const projectH = (fwd: number, h: number, lat: number): { x: number; y: number; scale: number } | null => {
-    const gp = projectG(fwd, lat);
-    if (!gp) return null;
-    return { x: gp.x, y: gp.y - h * heightScale, scale: gp.scale };
-  };
+  const projectH = (fwd: number, h: number, lat: number) => projectBall(projConfig, heightScale, fwd, h, lat);
 
   // === FULL CANVAS FILL (prevent any black gaps) ===
   ctx.fillStyle = '#38c058'; // fairway green as base
@@ -565,6 +540,7 @@ function drawGroundView(
 
     if (pointCount > 1) {
       // Outer glow trail (wider, softer)
+      ctx.save();
       ctx.shadowColor = 'rgba(255, 255, 100, 0.5)';
       ctx.shadowBlur = 8;
       ctx.beginPath();
@@ -578,7 +554,7 @@ function drawGroundView(
       ctx.strokeStyle = 'rgba(255, 255, 120, 0.4)';
       ctx.lineWidth = 3;
       ctx.stroke();
-      ctx.shadowBlur = 0;
+      ctx.restore();
 
       // Inner bright trail
       ctx.beginPath();
