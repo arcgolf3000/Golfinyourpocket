@@ -263,31 +263,6 @@ function drawBirdsEye(
 }
 
 // ==================== GROUND-LEVEL (PERSPECTIVE) VIEW ====================
-// Separate projection for ground view — ball height uses a much bigger multiplier
-// so the ball arcs HIGH into the sky like the Impact Vision reference
-function projectGround(
-  forwardYards: number,
-  heightYards: number,
-  lateralYards: number,
-  width: number,
-  height: number,
-  horizon: number,
-  groundY: number,
-  focalLength: number,
-): { x: number; y: number; scale: number } | null {
-  const depth = forwardYards + focalLength;
-  if (depth <= 0) return null;
-  const scale = focalLength / depth;
-  const cx = width / 2;
-  // Ground position (no height)
-  const gndY = groundY - (groundY - horizon) * (1 - scale);
-  // Height offset: aggressive multiplier so ball visibly arcs into sky
-  // A 30-yard apex should reach well above the horizon
-  const heightPx = heightYards * (height * 0.035) * (0.4 + scale * 0.6);
-  const screenX = cx + lateralYards * scale * 3.5;
-  const screenY = gndY - heightPx;
-  return { x: screenX, y: screenY, scale };
-}
 
 function drawGroundView(
   ctx: CanvasRenderingContext2D,
@@ -298,16 +273,44 @@ function drawGroundView(
   shotLandings: Array<{ x: number; z: number; club: string }>,
   units: UnitSystem,
 ) {
-  // Horizon at 35% — plenty of fairway visible with sky above for ball flight
   const horizon = height * 0.35;
   const groundY = height - 16;
   const focalLength = 60;
 
-  // Helper for ground-only projection (height=0)
-  const projectG = (fwd: number, lat: number) =>
-    projectGround(fwd, 0, lat, width, height, horizon, groundY, focalLength);
-  const projectH = (fwd: number, h: number, lat: number) =>
-    projectGround(fwd, h, lat, width, height, horizon, groundY, focalLength);
+  // --- Projection helpers ---
+  // Ground projection (no height component)
+  const projectG = (fwd: number, lat: number): { x: number; y: number; scale: number } | null => {
+    const depth = fwd + focalLength;
+    if (depth <= 0) return null;
+    const scale = focalLength / depth;
+    const gndY = groundY - (groundY - horizon) * (1 - scale);
+    return { x: width / 2 + lat * scale * 3.5, y: gndY, scale };
+  };
+
+  // Ball projection with dynamic height scaling
+  // Compute maxApex from trajectory so the apex always reaches ~15% from top
+  let heightScale = 1;
+  if (trajectory && trajectory.length > 2) {
+    const maxH = Math.max(...trajectory.map(p => p.y)) * M_TO_YARDS;
+    // Find where the apex point lands on the ground (to get its gndY)
+    const apexPt = trajectory.reduce((m, p) => p.y > m.y ? p : m, trajectory[0]);
+    const apexFwd = apexPt.x * M_TO_YARDS;
+    const apexGnd = projectG(apexFwd, 0);
+    if (apexGnd && maxH > 0) {
+      // We want the apex to reach screen y = height * 0.08 (near top, in sky)
+      const targetScreenY = height * 0.08;
+      const availablePx = apexGnd.y - targetScreenY;
+      heightScale = availablePx / maxH;
+    }
+  }
+  // Ensure minimum scale so even tiny shots show a visible arc
+  heightScale = Math.max(heightScale, 2);
+
+  const projectH = (fwd: number, h: number, lat: number): { x: number; y: number; scale: number } | null => {
+    const gp = projectG(fwd, lat);
+    if (!gp) return null;
+    return { x: gp.x, y: gp.y - h * heightScale, scale: gp.scale };
+  };
 
   // === SKY — bright blue like real outdoor range ===
   const skyGrad = ctx.createLinearGradient(0, 0, 0, horizon);
