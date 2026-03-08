@@ -272,14 +272,24 @@ export default function SwingCamera({
         <div className="text-gold text-sm font-bold tracking-widest uppercase">
           {isRecording ? 'Recording' : 'Setup'}
         </div>
-        {!isRecording && (
-          <button
-            onClick={onClose}
-            className="w-9 h-9 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center text-white text-lg cursor-pointer"
-          >
-            ✕
-          </button>
-        )}
+        <div className="flex items-center gap-3">
+          {!isRecording && (
+            <button
+              onClick={onToggleHand}
+              className="px-3 py-1.5 bg-white/10 backdrop-blur-sm rounded-lg text-gold text-[10px] tracking-wider cursor-pointer"
+            >
+              {leftHanded ? 'LEFT' : 'RIGHT'}
+            </button>
+          )}
+          {!isRecording && (
+            <button
+              onClick={onClose}
+              className="w-9 h-9 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center text-white text-lg cursor-pointer"
+            >
+              ✕
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Recording indicator */}
@@ -323,12 +333,6 @@ export default function SwingCamera({
           <div className="text-white/60 text-xs text-center px-8">
             Position phone sideways with ball and golfer in frame
           </div>
-          <button
-            onClick={onToggleHand}
-            className="px-4 py-2 bg-white/10 backdrop-blur-sm rounded-lg text-gold text-xs tracking-wider cursor-pointer"
-          >
-            {leftHanded ? 'LEFT-HANDED' : 'RIGHT-HANDED'}
-          </button>
           <div className="flex items-center gap-6">
             <button
               onClick={onClose}
