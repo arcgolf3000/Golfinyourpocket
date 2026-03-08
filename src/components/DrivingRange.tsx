@@ -95,9 +95,9 @@ export default function DrivingRange() {
     window.addEventListener('resize', update);
     return () => window.removeEventListener('resize', update);
   }, []);
-  // Ground view uses landscape ratio (like real sim), bird's eye uses portrait
+  // Ground view uses wider ratio for visible ball arc, bird's eye uses portrait
   const rangeH = rangeViewType === 'ground'
-    ? Math.round(canvasWidth * 0.65)
+    ? Math.round(canvasWidth * 0.85)
     : Math.round(canvasWidth * 1.1);
   const dimensions = { w: canvasWidth, h: rangeH };
 
