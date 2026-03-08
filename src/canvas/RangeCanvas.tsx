@@ -312,6 +312,10 @@ function drawGroundView(
     return { x: gp.x, y: gp.y - h * heightScale, scale: gp.scale };
   };
 
+  // === FULL CANVAS FILL (prevent any black gaps) ===
+  ctx.fillStyle = '#38c058'; // fairway green as base
+  ctx.fillRect(0, 0, width, height);
+
   // === SKY — bright blue like real outdoor range ===
   const skyGrad = ctx.createLinearGradient(0, 0, 0, horizon);
   skyGrad.addColorStop(0, '#1a6bc4');

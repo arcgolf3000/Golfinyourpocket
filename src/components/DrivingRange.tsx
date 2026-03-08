@@ -86,16 +86,20 @@ export default function DrivingRange() {
   }, []);
 
   // Compute canvas dimensions responsively
-  const [dimensions, setDimensions] = useState({ w: 360, h: 400 });
+  const [canvasWidth, setCanvasWidth] = useState(360);
   useEffect(() => {
     const update = () => {
-      const w = Math.min(window.innerWidth - 32, 420);
-      setDimensions({ w, h: Math.round(w * 1.1) });
+      setCanvasWidth(Math.min(window.innerWidth - 32, 420));
     };
     update();
     window.addEventListener('resize', update);
     return () => window.removeEventListener('resize', update);
   }, []);
+  // Ground view uses landscape ratio (like real sim), bird's eye uses portrait
+  const rangeH = rangeViewType === 'ground'
+    ? Math.round(canvasWidth * 0.65)
+    : Math.round(canvasWidth * 1.1);
+  const dimensions = { w: canvasWidth, h: rangeH };
 
   const shotLandings = shots.map(s => ({
     x: s.result.trajectory[s.result.trajectory.length - 1]?.x ?? 0,
