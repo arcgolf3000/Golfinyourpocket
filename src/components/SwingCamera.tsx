@@ -91,8 +91,8 @@ export default function SwingCamera({
     const ballPct = 0.5;   // ball between feet
     const targetDir = leftHanded ? 1 : -1; // 1 = right, -1 = left
 
-    // Ground line
-    const groundY = h * 0.78;
+    // Ground line — positioned in upper half so bottom controls don't overlap
+    const groundY = h * 0.55;
     ctx.strokeStyle = 'rgba(255, 204, 51, 0.4)';
     ctx.lineWidth = 1;
     ctx.setLineDash([8, 6]);
@@ -105,7 +105,7 @@ export default function SwingCamera({
     // Golfer stance zone
     const stanceX = w * stancePct;
     const stanceW = w * 0.22;
-    const stanceTop = h * 0.2;
+    const stanceTop = h * 0.15;
 
     ctx.strokeStyle = 'rgba(255, 204, 51, 0.25)';
     ctx.lineWidth = 1.5;
@@ -332,15 +332,11 @@ export default function SwingCamera({
 
       {/* Bottom controls */}
       {cameraReady && !isRecording && countdown === null && (
-        <div className="absolute bottom-6 left-0 right-0 flex flex-col items-center gap-3 z-10">
-          <div className="bg-black/50 backdrop-blur-sm rounded-xl px-4 py-3 mx-6 text-center space-y-1">
-            <div className="text-gold text-[10px] tracking-widest uppercase mb-1">Setup Guide</div>
-            <div className="text-white/60 text-[11px] leading-relaxed">
-              Camera <span className="text-white/80">{units === 'metric' ? '2.5–3 m' : '8–10 ft'}</span> away, waist height
-            </div>
-            <div className="text-white/60 text-[11px] leading-relaxed">
-              Net <span className="text-white/80">{units === 'metric' ? '2–3 m' : '7–10 ft'}</span> in front of ball
-            </div>
+        <div className="absolute bottom-4 left-0 right-0 flex flex-col items-center gap-2 z-10">
+          <div className="bg-black/60 backdrop-blur-sm rounded-lg px-3 py-2 mx-6 text-center flex gap-3 text-[10px]">
+            <span className="text-white/50">Camera <span className="text-white/80">{units === 'metric' ? '2.5–3 m' : '8–10 ft'}</span></span>
+            <span className="text-white/30">|</span>
+            <span className="text-white/50">Net <span className="text-white/80">{units === 'metric' ? '2–3 m' : '7–10 ft'}</span></span>
           </div>
           <div className="flex items-center gap-6">
             <button
