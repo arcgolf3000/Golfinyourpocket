@@ -2,7 +2,7 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: [main, claude/ai-session-task-4XKBb]
+    branches: [main, claude/ai-session-task-4XKBb, claude/fix-ball-flight-system-8RUD8]
 
 permissions:
   contents: read
