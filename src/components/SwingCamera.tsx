@@ -81,10 +81,11 @@ export default function SwingCamera({
 
     if (isRecording) return; // Don't draw guides while recording
 
-    // Right-handed: ball left, golfer right, target left
-    // Left-handed: ball right, golfer left, target right
-    const ballPct = leftHanded ? 0.55 : 0.45;
-    const stancePct = leftHanded ? 0.42 : 0.58;
+    // Ball sits between the golfer's feet
+    // Right-handed: target is to the left, golfer faces left
+    // Left-handed: target is to the right, golfer faces right
+    const stancePct = 0.5; // golfer centered
+    const ballPct = 0.5;   // ball between feet
     const targetDir = leftHanded ? 1 : -1; // 1 = right, -1 = left
 
     // Ground line
@@ -98,7 +99,30 @@ export default function SwingCamera({
     ctx.stroke();
     ctx.setLineDash([]);
 
-    // Ball position marker
+    // Golfer stance zone
+    const stanceX = w * stancePct;
+    const stanceW = w * 0.22;
+    const stanceTop = h * 0.2;
+
+    ctx.strokeStyle = 'rgba(255, 204, 51, 0.25)';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([6, 4]);
+    ctx.strokeRect(stanceX - stanceW / 2, stanceTop, stanceW, groundY - stanceTop);
+    ctx.setLineDash([]);
+
+    ctx.fillStyle = 'rgba(255, 204, 51, 0.5)';
+    ctx.font = '10px "DM Sans", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('GOLFER', stanceX, stanceTop - 8);
+
+    // Feet markers (wider apart to show stance width)
+    const footY = groundY - 4;
+    const footSpread = stanceW * 0.35;
+    ctx.fillStyle = 'rgba(255, 204, 51, 0.4)';
+    ctx.fillRect(stanceX - footSpread - 4, footY, 8, 4);
+    ctx.fillRect(stanceX + footSpread - 4, footY, 8, 4);
+
+    // Ball position marker — between the feet, on the ground
     const ballX = w * ballPct;
     const ballY = groundY;
     const ballR = 6;
@@ -118,27 +142,6 @@ export default function SwingCamera({
     ctx.fillStyle = 'rgba(255, 204, 51, 0.7)';
     ctx.textAlign = 'center';
     ctx.fillText('BALL', ballX, ballY + 26);
-
-    // Golfer stance zone
-    const stanceX = w * stancePct;
-    const stanceW = w * 0.18;
-    const stanceTop = h * 0.2;
-
-    ctx.strokeStyle = 'rgba(255, 204, 51, 0.25)';
-    ctx.lineWidth = 1.5;
-    ctx.setLineDash([6, 4]);
-    ctx.strokeRect(stanceX - stanceW / 2, stanceTop, stanceW, groundY - stanceTop);
-    ctx.setLineDash([]);
-
-    ctx.fillStyle = 'rgba(255, 204, 51, 0.5)';
-    ctx.font = '10px "DM Sans", sans-serif';
-    ctx.fillText('GOLFER', stanceX, stanceTop - 8);
-
-    // Feet markers
-    const footY = groundY - 4;
-    ctx.fillStyle = 'rgba(255, 204, 51, 0.4)';
-    ctx.fillRect(stanceX - 14, footY, 8, 4);
-    ctx.fillRect(stanceX + 6, footY, 8, 4);
 
     // Camera hint
     ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
