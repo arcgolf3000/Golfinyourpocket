@@ -262,7 +262,9 @@ function drawBirdsEye(
   }
 }
 
-// ==================== GROUND-LEVEL (PERSPECTIVE) VIEW ====================
+// ==================== GROUND-LEVEL VIEW ====================
+// All projection math is inline. Ball flight avoids shadowBlur,
+// shadowColor, and createRadialGradient which fail on iPad Safari.
 
 function drawGroundView(
   ctx: CanvasRenderingContext2D,
@@ -275,55 +277,21 @@ function drawGroundView(
 ) {
   const horizon = height * 0.35;
   const groundY = height - 16;
-  const focalLength = 60;
+  const groundH = groundY - horizon;
+  const FL = 60;
+  const cx = width / 2;
 
-  // --- Projection helpers ---
-  // Ground projection (no height component)
-  const projectG = (fwd: number, lat: number): { x: number; y: number; scale: number } | null => {
-    const depth = fwd + focalLength;
-    if (depth <= 0) return null;
-    const scale = focalLength / depth;
-    const gndY = groundY - (groundY - horizon) * (1 - scale);
-    return { x: width / 2 + lat * scale * 3.5, y: gndY, scale };
+  const fwdToGndY = (fwd: number) => {
+    const s = FL / (fwd + FL);
+    return groundY - groundH * (1 - s);
   };
+  const scaleAt = (fwd: number) => FL / (fwd + FL);
 
-  // Ball projection with dynamic height scaling
-  // Compute maxApex from trajectory so the apex always reaches ~15% from top
-  let heightScale = 1;
-  if (trajectory && trajectory.length > 2) {
-    const maxH = Math.max(...trajectory.map(p => p.y)) * M_TO_YARDS;
-    // Find where the apex point lands on the ground (to get its gndY)
-    const apexPt = trajectory.reduce((m, p) => p.y > m.y ? p : m, trajectory[0]);
-    const apexFwd = apexPt.x * M_TO_YARDS;
-    const apexGnd = projectG(apexFwd, 0);
-    if (apexGnd && maxH > 0) {
-      // We want the apex to reach screen y = height * 0.08 (near top, in sky)
-      const targetScreenY = height * 0.08;
-      const availablePx = apexGnd.y - targetScreenY;
-      heightScale = availablePx / maxH;
-    }
-  }
-  // Ensure minimum scale so even tiny shots show a visible arc
-  heightScale = Math.max(heightScale, 2);
-
-  const projectH = (fwd: number, h: number, lat: number): { x: number; y: number; scale: number } | null => {
-    const gp = projectG(fwd, lat);
-    if (!gp) return null;
-    return { x: gp.x, y: gp.y - h * heightScale, scale: gp.scale };
-  };
-
-  // === FULL CANVAS FILL (prevent any black gaps) ===
-  ctx.fillStyle = '#38c058'; // fairway green as base
+  // === BACKGROUND ===
+  ctx.fillStyle = '#38c058';
   ctx.fillRect(0, 0, width, height);
 
-  // === DEBUG (top of function, before anything can crash) ===
-  ctx.fillStyle = '#ff0000';
-  ctx.fillRect(5, 5, 15, 15);
-  ctx.font = 'bold 12px monospace';
-  ctx.textAlign = 'left';
-  ctx.fillText(`GV t=${trajectory ? trajectory.length : 'null'} a=${animationProgress.toFixed(2)} hS=${heightScale.toFixed(1)}`, 25, 17);
-
-  // === SKY — bright blue like real outdoor range ===
+  // Sky
   const skyGrad = ctx.createLinearGradient(0, 0, 0, horizon);
   skyGrad.addColorStop(0, '#1a6bc4');
   skyGrad.addColorStop(0.25, '#2b80d4');
@@ -334,21 +302,16 @@ function drawGroundView(
   ctx.fillStyle = skyGrad;
   ctx.fillRect(0, 0, width, horizon);
 
-  // === CLOUDS ===
-  const drawCloud = (cx: number, cy: number, size: number, alpha: number) => {
+  // Clouds
+  const drawCloud = (cloudX: number, cloudY: number, size: number, alpha: number) => {
     ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
-    const blobs: [number, number, number][] = [
-      [0, 0, size],
-      [-size * 0.8, size * 0.1, size * 0.6],
-      [size * 0.7, size * 0.12, size * 0.55],
-      [-size * 0.35, -size * 0.35, size * 0.55],
+    for (const [ox, oy, r] of [
+      [0, 0, size], [-size * 0.8, size * 0.1, size * 0.6],
+      [size * 0.7, size * 0.12, size * 0.55], [-size * 0.35, -size * 0.35, size * 0.55],
       [size * 0.4, -size * 0.3, size * 0.5],
-      [-size * 1.2, size * 0.2, size * 0.4],
-      [size * 1.1, size * 0.15, size * 0.35],
-    ];
-    for (const [ox, oy, r] of blobs) {
+    ] as [number, number, number][]) {
       ctx.beginPath();
-      ctx.arc(cx + ox, cy + oy, r, 0, 2 * Math.PI);
+      ctx.arc(cloudX + ox, cloudY + oy, r, 0, 2 * Math.PI);
       ctx.fill();
     }
   };
@@ -356,14 +319,12 @@ function drawGroundView(
   drawCloud(width * 0.55, horizon * 0.2, 18, 0.3);
   drawCloud(width * 0.82, horizon * 0.4, 12, 0.25);
   drawCloud(width * 0.35, horizon * 0.55, 16, 0.2);
-  drawCloud(width * 0.7, horizon * 0.65, 13, 0.15);
 
-  // === MOUNTAINS ===
-  // Far mountain range (bluish/hazy)
+  // Mountains (far)
   ctx.fillStyle = '#5a8aaa';
   ctx.beginPath();
   ctx.moveTo(0, horizon);
-  for (let x = 0; x <= width; x += 3) {
+  for (let x = 0; x <= width; x += 4) {
     const mh = Math.sin(x * 0.008) * 22 + Math.sin(x * 0.02) * 12 + Math.cos(x * 0.005) * 15 + 28;
     ctx.lineTo(x, horizon - mh);
   }
@@ -371,11 +332,11 @@ function drawGroundView(
   ctx.closePath();
   ctx.fill();
 
-  // Near mountain range (darker, greener)
+  // Mountains (near)
   ctx.fillStyle = '#3d6a4a';
   ctx.beginPath();
   ctx.moveTo(0, horizon);
-  for (let x = 0; x <= width; x += 3) {
+  for (let x = 0; x <= width; x += 4) {
     const mh = Math.sin(x * 0.012 + 1) * 14 + Math.sin(x * 0.03) * 8 + Math.cos(x * 0.007 + 2) * 10 + 16;
     ctx.lineTo(x, horizon - mh);
   }
@@ -383,243 +344,270 @@ function drawGroundView(
   ctx.closePath();
   ctx.fill();
 
-  // === TREE LINE at horizon ===
+  // Tree line
   ctx.fillStyle = '#1a4a28';
   for (let tx = 0; tx < width; tx += 10) {
-    const th = 5 + Math.sin(tx * 0.25) * 3 + Math.cos(tx * 0.15) * 2 + Math.sin(tx * 0.08) * 2;
+    const th = 5 + Math.sin(tx * 0.25) * 3 + Math.cos(tx * 0.15) * 2;
     ctx.beginPath();
     ctx.arc(tx, horizon, th, Math.PI, 0);
     ctx.fill();
   }
-  // Tree highlights
-  ctx.fillStyle = '#246633';
-  for (let tx = 4; tx < width; tx += 16) {
-    const th = 2.5 + Math.sin(tx * 0.35) * 1.5;
-    ctx.beginPath();
-    ctx.arc(tx, horizon - 2, th, Math.PI, 0);
-    ctx.fill();
-  }
 
-  // === FAIRWAY — bright vivid green ===
+  // Fairway
   const fairwayGrad = ctx.createLinearGradient(0, horizon, 0, height);
   fairwayGrad.addColorStop(0, '#1a6630');
-  fairwayGrad.addColorStop(0.15, '#208838');
-  fairwayGrad.addColorStop(0.4, '#28a045');
+  fairwayGrad.addColorStop(0.3, '#228840');
   fairwayGrad.addColorStop(0.7, '#30b050');
   fairwayGrad.addColorStop(1, '#38c058');
   ctx.fillStyle = fairwayGrad;
   ctx.fillRect(0, horizon, width, height - horizon);
 
   // Mowing stripes
-  for (let d = 10; d < 320; d += 12) {
-    const p = projectG(d, 0);
-    if (!p || p.y < horizon) continue;
-    const stripe = projectG(d + 6, 0);
-    if (!stripe) continue;
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.03)';
-    ctx.fillRect(0, p.y, width, stripe.y - p.y);
+  for (let d = 10; d < 320; d += 14) {
+    const y1 = fwdToGndY(d);
+    const y2 = fwdToGndY(d + 7);
+    if (y1 < horizon) continue;
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.025)';
+    ctx.fillRect(0, y2, width, y1 - y2);
   }
 
-  // === DISTANCE MARKERS & FLAGS ===
+  // === DISTANCE MARKERS ===
   for (const dist of DISTANCE_MARKERS) {
-    const p = projectG(dist, 0);
-    if (!p || p.y < horizon + 3) continue;
+    const y = fwdToGndY(dist);
+    if (y < horizon + 2) continue;
+    const s = scaleAt(dist);
 
-    // Distance line
-    const pLeft = projectG(dist, -50);
-    const pRight = projectG(dist, 50);
-    if (pLeft && pRight) {
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
-      ctx.lineWidth = 1;
-      ctx.setLineDash([4, 6]);
-      ctx.beginPath();
-      ctx.moveTo(pLeft.x, pLeft.y);
-      ctx.lineTo(pRight.x, pRight.y);
-      ctx.stroke();
-      ctx.setLineDash([]);
-    }
-
-    // Target green
-    const greenR = Math.max(3, 14 * p.scale);
-    const greenGrad = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, greenR);
-    greenGrad.addColorStop(0, 'rgba(34, 200, 34, 0.5)');
-    greenGrad.addColorStop(0.6, 'rgba(34, 160, 34, 0.25)');
-    greenGrad.addColorStop(1, 'rgba(34, 139, 34, 0)');
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 6]);
     ctx.beginPath();
-    ctx.arc(p.x, p.y, greenR, 0, 2 * Math.PI);
-    ctx.fillStyle = greenGrad;
-    ctx.fill();
+    ctx.moveTo(cx - 80 * s, y);
+    ctx.lineTo(cx + 80 * s, y);
+    ctx.stroke();
+    ctx.setLineDash([]);
 
-    // Flag pin
-    const flagHeight = Math.max(5, 16 * p.scale);
-    ctx.strokeStyle = `rgba(255, 255, 255, ${0.4 + p.scale * 0.4})`;
+    const fh = Math.max(6, 14 * s);
+    ctx.strokeStyle = `rgba(255,255,255,${0.4 + s * 0.4})`;
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.moveTo(p.x, p.y);
-    ctx.lineTo(p.x, p.y - flagHeight);
+    ctx.moveTo(cx, y);
+    ctx.lineTo(cx, y - fh);
     ctx.stroke();
-
     ctx.fillStyle = dist <= 150 ? '#ee4444' : '#eecc33';
     ctx.beginPath();
-    ctx.moveTo(p.x, p.y - flagHeight);
-    ctx.lineTo(p.x + Math.max(3, 5 * p.scale), p.y - flagHeight + 2.5);
-    ctx.lineTo(p.x, p.y - flagHeight + 5);
+    ctx.moveTo(cx, y - fh);
+    ctx.lineTo(cx + Math.max(3, 5 * s), y - fh + 2.5);
+    ctx.lineTo(cx, y - fh + 5);
     ctx.closePath();
     ctx.fill();
 
-    // Distance label
-    const distLabel = units === 'metric' ? `${Math.round(dist * YARDS_TO_METRES)}m` : `${dist}`;
-    ctx.fillStyle = `rgba(255, 255, 255, ${0.35 + p.scale * 0.35})`;
-    ctx.font = `bold ${Math.max(8, Math.round(11 * p.scale))}px "DM Sans", system-ui`;
-    ctx.textAlign = 'right';
-    const labelP = projectG(dist, 25);
-    if (labelP && labelP.x < width - 5) {
-      ctx.fillText(distLabel, labelP.x, labelP.y - 2);
-    }
+    const dl = units === 'metric' ? `${Math.round(dist * YARDS_TO_METRES)}m` : `${dist}`;
+    ctx.fillStyle = `rgba(255,255,255,${0.3 + s * 0.4})`;
+    ctx.font = `bold ${Math.max(8, Math.round(11 * s))}px "DM Sans", system-ui`;
+    ctx.textAlign = 'left';
+    ctx.fillText(dl, cx + Math.max(6, 12 * s), y - 2);
   }
 
-  // === TEE AREA (bottom of screen) ===
+  // === TEE ===
   const teeW = 50, teeH = 10;
-  const teeGrad = ctx.createLinearGradient(
-    width / 2 - teeW / 2, groundY - teeH,
-    width / 2 + teeW / 2, groundY,
-  );
-  teeGrad.addColorStop(0, '#35a855');
-  teeGrad.addColorStop(1, '#2a9048');
-  ctx.fillStyle = teeGrad;
+  ctx.fillStyle = '#2d8a4e';
   ctx.beginPath();
-  ctx.roundRect(width / 2 - teeW / 2, groundY - teeH, teeW, teeH, 3);
+  ctx.roundRect(cx - teeW / 2, groundY - teeH, teeW, teeH, 3);
   ctx.fill();
-
-  // Tee markers
   ctx.fillStyle = '#ffcc33';
   ctx.beginPath();
-  ctx.arc(width / 2 - 10, groundY - teeH / 2, 2.5, 0, 2 * Math.PI);
+  ctx.arc(cx - 10, groundY - teeH / 2, 2.5, 0, 2 * Math.PI);
   ctx.fill();
   ctx.beginPath();
-  ctx.arc(width / 2 + 10, groundY - teeH / 2, 2.5, 0, 2 * Math.PI);
+  ctx.arc(cx + 10, groundY - teeH / 2, 2.5, 0, 2 * Math.PI);
   ctx.fill();
 
-  // Ball on tee (when no shot in progress)
   if (!trajectory || animationProgress === 0) {
     ctx.beginPath();
-    ctx.arc(width / 2, groundY - teeH - 4, 4, 0, 2 * Math.PI);
+    ctx.arc(cx, groundY - teeH - 4, 4, 0, 2 * Math.PI);
     ctx.fillStyle = '#ffffff';
     ctx.fill();
-    ctx.strokeStyle = 'rgba(0,0,0,0.1)';
-    ctx.lineWidth = 0.5;
-    ctx.stroke();
   }
 
   // === PREVIOUS LANDINGS ===
-  try {
-    for (const landing of shotLandings) {
-      const lx = landing.x * M_TO_YARDS;
-      const lz = landing.z * M_TO_YARDS;
-      const lp = projectG(lx, lz);
-      if (!lp || lp.y < horizon) continue;
-
-      const r = Math.max(2, 4 * lp.scale);
-      ctx.beginPath();
-      ctx.arc(lp.x, lp.y, r, 0, 2 * Math.PI);
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
-      ctx.fill();
-    }
-  } catch (e) {
-    ctx.fillStyle = '#ff0000';
-    ctx.font = 'bold 11px monospace';
-    ctx.fillText(`LAND ERR: ${e}`, 5, height - 50);
+  for (const landing of shotLandings) {
+    const lx = landing.x * M_TO_YARDS;
+    const lz = landing.z * M_TO_YARDS;
+    const ly = fwdToGndY(lx);
+    if (ly < horizon) continue;
+    const s = scaleAt(lx);
+    const lsx = cx + lz * s * (width / 60);
+    ctx.beginPath();
+    ctx.arc(lsx, ly, Math.max(2, 4 * s), 0, 2 * Math.PI);
+    ctx.fillStyle = 'rgba(255,255,255,0.25)';
+    ctx.fill();
   }
 
-  // === PREDICTIVE LANDING ZONE ===
-  try {
-    if (trajectory && trajectory.length > 2 && animationProgress > 0) {
-      const finalPoint = trajectory[trajectory.length - 1];
-      const landX = finalPoint.x * M_TO_YARDS;
-      const landZ = finalPoint.z * M_TO_YARDS;
-      const landP = projectG(landX, landZ);
+  // === BALL FLIGHT (no shadowBlur/shadowColor/radialGradient) ===
+  if (!trajectory || trajectory.length < 3 || animationProgress <= 0) return;
 
-      if (landP && landP.y > horizon) {
-        const pulse = 0.6 + Math.sin(Date.now() * 0.004) * 0.3;
-        const landR = Math.max(4, 10 * landP.scale);
+  // Height scale: apex reaches ~10% from top of canvas
+  let maxH = 0;
+  let apexFwd = 0;
+  for (let i = 0; i < trajectory.length; i++) {
+    const hy = trajectory[i].y * M_TO_YARDS;
+    if (hy > maxH) { maxH = hy; apexFwd = trajectory[i].x * M_TO_YARDS; }
+  }
+  const apexGndY = fwdToGndY(apexFwd);
+  const targetY = height * 0.10;
+  const hScale = maxH > 0 ? Math.max((apexGndY - targetY) / maxH, 2) : 2;
 
-        ctx.strokeStyle = `rgba(255, 220, 50, ${0.5 * pulse})`;
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.arc(landP.x, landP.y, landR, 0, 2 * Math.PI);
-        ctx.stroke();
+  const toScreen = (p: TrajectoryPoint) => {
+    const fwd = p.x * M_TO_YARDS;
+    const h = p.y * M_TO_YARDS;
+    const lat = p.z * M_TO_YARDS;
+    const s = scaleAt(fwd);
+    const sx = cx + lat * s * (width / 60);
+    const sy = fwdToGndY(fwd) - h * hScale;
+    return { x: sx, y: sy, s };
+  };
 
-        ctx.fillStyle = `rgba(255, 220, 50, ${0.12 * pulse})`;
-        ctx.beginPath();
-        ctx.arc(landP.x, landP.y, landR, 0, 2 * Math.PI);
-        ctx.fill();
-      }
-    }
-  } catch (e) {
-    ctx.fillStyle = '#ff0000';
-    ctx.font = 'bold 11px monospace';
-    ctx.fillText(`ZONE ERR: ${e}`, 5, height - 35);
+  const pointCount = Math.floor(trajectory.length * animationProgress);
+  if (pointCount < 1) return;
+
+  // Landing zone (pulsing target)
+  const finalPt = trajectory[trajectory.length - 1];
+  const landFwd = finalPt.x * M_TO_YARDS;
+  const landGndY = fwdToGndY(landFwd);
+  const landS = scaleAt(landFwd);
+  const landSx = cx + finalPt.z * M_TO_YARDS * landS * (width / 60);
+  const pulse = 0.6 + Math.sin(Date.now() * 0.004) * 0.3;
+  const landR = Math.max(4, 10 * landS);
+
+  ctx.strokeStyle = `rgba(255, 220, 50, ${0.5 * pulse})`;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(landSx, landGndY, landR, 0, 2 * Math.PI);
+  ctx.stroke();
+  ctx.fillStyle = `rgba(255, 220, 50, ${0.12 * pulse})`;
+  ctx.beginPath();
+  ctx.arc(landSx, landGndY, landR, 0, 2 * Math.PI);
+  ctx.fill();
+
+  if (animationProgress < 1) {
+    const dl = units === 'metric'
+      ? `${Math.round(landFwd * YARDS_TO_METRES)}m`
+      : `${Math.round(landFwd)} yds`;
+    ctx.font = `bold ${Math.max(9, Math.round(11 * landS))}px "DM Sans", system-ui`;
+    ctx.textAlign = 'center';
+    const tw = ctx.measureText(dl).width + 10;
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    ctx.beginPath();
+    ctx.roundRect(landSx - tw / 2, landGndY - landR - 20, tw, 16, 3);
+    ctx.fill();
+    ctx.fillStyle = '#ffdd44';
+    ctx.fillText(dl, landSx, landGndY - landR - 8);
   }
 
-  // === BALL FLIGHT ===
-  try {
-    if (trajectory && trajectory.length > 2 && animationProgress > 0) {
-      const pointCount = Math.floor(trajectory.length * animationProgress);
+  // Trail — outer yellow (replaces shadowBlur glow)
+  ctx.save();
+  ctx.strokeStyle = 'rgba(255, 220, 80, 0.35)';
+  ctx.lineWidth = 5;
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  for (let i = 0; i < pointCount; i++) {
+    const sp = toScreen(trajectory[i]);
+    if (i === 0) ctx.moveTo(sp.x, sp.y);
+    else ctx.lineTo(sp.x, sp.y);
+  }
+  ctx.stroke();
+  ctx.restore();
 
-      // DEBUG info
-      ctx.fillStyle = '#ff0000';
-      ctx.font = 'bold 12px monospace';
-      ctx.textAlign = 'left';
-      ctx.fillText(`pts=${pointCount} len=${trajectory.length}`, 5, 35);
+  // Trail — inner color gradient (Toptracer style)
+  for (let i = 1; i < pointCount; i++) {
+    const prev = toScreen(trajectory[i - 1]);
+    const cur = toScreen(trajectory[i]);
+    const t = i / trajectory.length;
+    const r = 255;
+    const g = Math.round(80 + t * 175);
+    const b = Math.round(t > 0.7 ? (t - 0.7) / 0.3 * 200 : 40);
 
-      // Build screen points array
-      const screenPts: { x: number; y: number }[] = [];
-      for (let i = 0; i < pointCount; i++) {
-        const p = trajectory[i];
-        const sp = projectH(p.x * M_TO_YARDS, p.y * M_TO_YARDS, p.z * M_TO_YARDS);
-        if (sp) screenPts.push(sp);
-      }
+    ctx.beginPath();
+    ctx.moveTo(prev.x, prev.y);
+    ctx.lineTo(cur.x, cur.y);
+    ctx.strokeStyle = `rgb(${r}, ${g}, ${b})`;
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+  }
 
-      ctx.fillText(`scrPts=${screenPts.length}`, 5, 50);
+  // Landing vertical line
+  if (animationProgress >= 1) {
+    const lastSp = toScreen(trajectory[trajectory.length - 1]);
+    ctx.strokeStyle = 'rgba(255, 220, 80, 0.5)';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath();
+    ctx.moveTo(lastSp.x, lastSp.y);
+    ctx.lineTo(landSx, landGndY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
 
-      // Draw each point as an individual dot (most compatible rendering)
-      for (let i = 0; i < screenPts.length; i++) {
-        const alpha = 0.3 + (i / screenPts.length) * 0.7;
-        const size = 2 + (i / screenPts.length) * 2;
-        ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
-        ctx.fillRect(screenPts[i].x - size / 2, screenPts[i].y - size / 2, size, size);
-      }
+  // Current ball
+  const current = trajectory[Math.min(pointCount - 1, trajectory.length - 1)];
+  const bp = toScreen(current);
+  const ballSize = Math.max(5, 8 * bp.s);
 
-      // Current ball position
-      if (screenPts.length > 0) {
-        const ballPos = screenPts[screenPts.length - 1];
+  // Drop line to ground
+  const curGndY = fwdToGndY(current.x * M_TO_YARDS);
+  if (current.y * M_TO_YARDS > 1) {
+    ctx.strokeStyle = 'rgba(255, 220, 80, 0.3)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([2, 3]);
+    ctx.beginPath();
+    ctx.moveTo(bp.x, bp.y);
+    ctx.lineTo(bp.x, curGndY);
+    ctx.stroke();
+    ctx.setLineDash([]);
 
-        // Big bright ball
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(ballPos.x - 6, ballPos.y - 6, 12, 12);
+    // Ground shadow (simple circle, no radialGradient)
+    ctx.beginPath();
+    ctx.arc(bp.x, curGndY, Math.max(2, 4 * bp.s), 0, 2 * Math.PI);
+    ctx.fillStyle = 'rgba(0,0,0,0.2)';
+    ctx.fill();
+  }
 
-        // Yellow outline
-        ctx.strokeStyle = '#ffee44';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(ballPos.x - 7, ballPos.y - 7, 14, 14);
+  // Ball glow (concentric circles instead of radialGradient)
+  ctx.beginPath();
+  ctx.arc(bp.x, bp.y, ballSize * 3, 0, 2 * Math.PI);
+  ctx.fillStyle = 'rgba(255, 200, 50, 0.08)';
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(bp.x, bp.y, ballSize * 2, 0, 2 * Math.PI);
+  ctx.fillStyle = 'rgba(255, 220, 80, 0.15)';
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(bp.x, bp.y, ballSize * 1.2, 0, 2 * Math.PI);
+  ctx.fillStyle = 'rgba(255, 255, 200, 0.3)';
+  ctx.fill();
 
-        ctx.fillText(`ball=(${ballPos.x.toFixed(0)},${ballPos.y.toFixed(0)})`, 5, 65);
+  // Ball
+  ctx.beginPath();
+  ctx.arc(bp.x, bp.y, ballSize, 0, 2 * Math.PI);
+  ctx.fillStyle = '#ffffff';
+  ctx.fill();
 
-        // Vertical line from ball to ground (use fillRect instead of stroke)
-        const currP = trajectory[Math.min(pointCount - 1, trajectory.length - 1)];
-        const groundPt = projectG(currP.x * M_TO_YARDS, currP.z * M_TO_YARDS);
-        if (groundPt && currP.y * M_TO_YARDS > 0.5) {
-          const topY = Math.min(ballPos.y, groundPt.y);
-          const botY = Math.max(ballPos.y, groundPt.y);
-          ctx.fillStyle = 'rgba(255, 238, 68, 0.4)';
-          ctx.fillRect(ballPos.x - 0.5, topY, 1, botY - topY);
-        }
-      }
-    }
-  } catch (e) {
-    ctx.fillStyle = '#ff0000';
-    ctx.font = 'bold 11px monospace';
-    ctx.fillText(`FLIGHT ERR: ${e}`, 5, height - 20);
+  // Distance label while animating
+  if (animationProgress < 1) {
+    const dist = current.x * M_TO_YARDS;
+    const label = units === 'metric'
+      ? `${Math.round(dist * YARDS_TO_METRES)}m`
+      : `${Math.round(dist)} yds`;
+    ctx.font = 'bold 10px "DM Sans", system-ui';
+    ctx.textAlign = 'left';
+    const tw = ctx.measureText(label).width + 8;
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.beginPath();
+    ctx.roundRect(bp.x + ballSize + 6, bp.y - 8, tw, 16, 3);
+    ctx.fill();
+    ctx.fillStyle = '#ffdd44';
+    ctx.fillText(label, bp.x + ballSize + 10, bp.y + 4);
   }
 }
 
