@@ -329,9 +329,15 @@ export default function SwingCamera({
 
       {/* Bottom controls */}
       {cameraReady && !isRecording && countdown === null && (
-        <div className="absolute bottom-8 left-0 right-0 flex flex-col items-center gap-4 z-10">
-          <div className="text-white/60 text-xs text-center px-8">
-            Position phone sideways with ball and golfer in frame
+        <div className="absolute bottom-6 left-0 right-0 flex flex-col items-center gap-3 z-10">
+          <div className="bg-black/50 backdrop-blur-sm rounded-xl px-4 py-3 mx-6 text-center space-y-1">
+            <div className="text-gold text-[10px] tracking-widest uppercase mb-1">Setup Guide</div>
+            <div className="text-white/60 text-[11px] leading-relaxed">
+              Camera <span className="text-white/80">8–10 ft</span> away, waist height
+            </div>
+            <div className="text-white/60 text-[11px] leading-relaxed">
+              Net <span className="text-white/80">7–10 ft</span> in front of ball
+            </div>
           </div>
           <div className="flex items-center gap-6">
             <button
