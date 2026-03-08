@@ -559,97 +559,83 @@ function drawGroundView(
     }
   }
 
-  // === BALL FLIGHT — bright visible trail ===
-  if (trajectory && animationProgress > 0) {
+  // === BALL FLIGHT ===
+  if (trajectory && trajectory.length > 2 && animationProgress > 0) {
     const pointCount = Math.floor(trajectory.length * animationProgress);
 
-    if (pointCount > 1) {
-      // Outer glow trail (wider, softer)
-      ctx.shadowColor = 'rgba(255, 255, 100, 0.5)';
-      ctx.shadowBlur = 8;
-      ctx.beginPath();
-      for (let i = 0; i < pointCount; i++) {
-        const p = trajectory[i];
-        const pp = projectH(p.x * M_TO_YARDS, p.y * M_TO_YARDS, p.z * M_TO_YARDS);
-        if (!pp) continue;
-        if (i === 0) ctx.moveTo(pp.x, pp.y);
-        else ctx.lineTo(pp.x, pp.y);
-      }
-      ctx.strokeStyle = 'rgba(255, 255, 120, 0.4)';
-      ctx.lineWidth = 3;
-      ctx.stroke();
-      ctx.shadowBlur = 0;
-
-      // Inner bright trail
-      ctx.beginPath();
-      for (let i = 0; i < pointCount; i++) {
-        const p = trajectory[i];
-        const pp = projectH(p.x * M_TO_YARDS, p.y * M_TO_YARDS, p.z * M_TO_YARDS);
-        if (!pp) continue;
-        if (i === 0) ctx.moveTo(pp.x, pp.y);
-        else ctx.lineTo(pp.x, pp.y);
-      }
-      ctx.strokeStyle = 'rgba(255, 255, 200, 0.85)';
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
-
-      // Vertical yellow line at landing point
-      if (animationProgress >= 1) {
-        const finalP = trajectory[trajectory.length - 1];
-        const landScreen = projectG(finalP.x * M_TO_YARDS, finalP.z * M_TO_YARDS);
-        const ballTop = projectH(finalP.x * M_TO_YARDS, 8, finalP.z * M_TO_YARDS);
-        if (landScreen && ballTop) {
-          ctx.strokeStyle = 'rgba(255, 255, 120, 0.6)';
-          ctx.lineWidth = 1.5;
-          ctx.beginPath();
-          ctx.moveTo(landScreen.x, landScreen.y);
-          ctx.lineTo(ballTop.x, ballTop.y);
-          ctx.stroke();
-        }
-      }
+    // Build screen points array
+    const screenPts: { x: number; y: number }[] = [];
+    for (let i = 0; i < pointCount; i++) {
+      const p = trajectory[i];
+      const sp = projectH(p.x * M_TO_YARDS, p.y * M_TO_YARDS, p.z * M_TO_YARDS);
+      if (sp) screenPts.push(sp);
     }
 
-    // Current ball
-    if (pointCount > 0 && pointCount <= trajectory.length) {
-      const current = trajectory[Math.min(pointCount - 1, trajectory.length - 1)];
-      const bp = projectH(current.x * M_TO_YARDS, current.y * M_TO_YARDS, current.z * M_TO_YARDS);
-      if (bp) {
-        const ballSize = Math.max(4, 7 * bp.scale);
+    if (screenPts.length > 1) {
+      // Thick yellow outer trail
+      ctx.save();
+      ctx.strokeStyle = '#ffee44';
+      ctx.lineWidth = 4;
+      ctx.lineJoin = 'round';
+      ctx.lineCap = 'round';
+      ctx.globalAlpha = 0.5;
+      ctx.beginPath();
+      ctx.moveTo(screenPts[0].x, screenPts[0].y);
+      for (let i = 1; i < screenPts.length; i++) {
+        ctx.lineTo(screenPts[i].x, screenPts[i].y);
+      }
+      ctx.stroke();
+      ctx.restore();
 
-        // Vertical line from ball down to ground
-        const shadowP = projectG(current.x * M_TO_YARDS, current.z * M_TO_YARDS);
-        if (shadowP && current.y * M_TO_YARDS > 1) {
-          ctx.strokeStyle = 'rgba(255, 255, 120, 0.35)';
-          ctx.lineWidth = 1;
+      // Bright white inner trail
+      ctx.save();
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 2;
+      ctx.lineJoin = 'round';
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(screenPts[0].x, screenPts[0].y);
+      for (let i = 1; i < screenPts.length; i++) {
+        ctx.lineTo(screenPts[i].x, screenPts[i].y);
+      }
+      ctx.stroke();
+      ctx.restore();
+
+      // Vertical line at landing
+      if (animationProgress >= 1) {
+        const lastPt = screenPts[screenPts.length - 1];
+        const finalP = trajectory[trajectory.length - 1];
+        const landGnd = projectG(finalP.x * M_TO_YARDS, finalP.z * M_TO_YARDS);
+        if (landGnd) {
+          ctx.strokeStyle = '#ffee44';
+          ctx.lineWidth = 2;
           ctx.beginPath();
-          ctx.moveTo(bp.x, bp.y);
-          ctx.lineTo(shadowP.x, shadowP.y);
+          ctx.moveTo(landGnd.x, landGnd.y);
+          ctx.lineTo(lastPt.x, lastPt.y - 10);
           ctx.stroke();
-
-          // Ground shadow
-          const sr = Math.max(2, 3 * shadowP.scale);
-          ctx.beginPath();
-          ctx.arc(shadowP.x, shadowP.y, sr, 0, 2 * Math.PI);
-          ctx.fillStyle = 'rgba(0, 0, 0, 0.15)';
-          ctx.fill();
         }
+      }
 
-        // Ball glow
-        const glow = ctx.createRadialGradient(bp.x, bp.y, 0, bp.x, bp.y, ballSize * 4);
-        glow.addColorStop(0, 'rgba(255, 255, 255, 1)');
-        glow.addColorStop(0.2, 'rgba(255, 255, 150, 0.5)');
-        glow.addColorStop(0.5, 'rgba(255, 255, 100, 0.15)');
-        glow.addColorStop(1, 'rgba(255, 255, 100, 0)');
-        ctx.beginPath();
-        ctx.arc(bp.x, bp.y, ballSize * 4, 0, 2 * Math.PI);
-        ctx.fillStyle = glow;
-        ctx.fill();
+      // Current ball position (big white dot)
+      const ballPos = screenPts[screenPts.length - 1];
+      ctx.beginPath();
+      ctx.arc(ballPos.x, ballPos.y, 6, 0, 2 * Math.PI);
+      ctx.fillStyle = '#ffffff';
+      ctx.fill();
+      ctx.strokeStyle = '#ffee44';
+      ctx.lineWidth = 2;
+      ctx.stroke();
 
-        // Ball
+      // Vertical line from ball to ground
+      const currP = trajectory[Math.min(pointCount - 1, trajectory.length - 1)];
+      const groundPt = projectG(currP.x * M_TO_YARDS, currP.z * M_TO_YARDS);
+      if (groundPt && currP.y * M_TO_YARDS > 0.5) {
+        ctx.strokeStyle = 'rgba(255, 238, 68, 0.4)';
+        ctx.lineWidth = 1;
         ctx.beginPath();
-        ctx.arc(bp.x, bp.y, ballSize, 0, 2 * Math.PI);
-        ctx.fillStyle = '#ffffff';
-        ctx.fill();
+        ctx.moveTo(ballPos.x, ballPos.y);
+        ctx.lineTo(groundPt.x, groundPt.y);
+        ctx.stroke();
       }
     }
   }
