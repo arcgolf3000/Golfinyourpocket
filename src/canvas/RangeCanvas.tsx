@@ -559,9 +559,24 @@ function drawGroundView(
     }
   }
 
+  // === DEBUG: Always draw a red marker so we know drawing works ===
+  ctx.fillStyle = '#ff0000';
+  ctx.fillRect(10, 10, 12, 12);
+
+  // === DEBUG: Show trajectory info ===
+  ctx.fillStyle = '#ff0000';
+  ctx.font = 'bold 14px monospace';
+  ctx.textAlign = 'left';
+  const tLen = trajectory ? trajectory.length : 0;
+  ctx.fillText(`traj=${tLen} anim=${animationProgress.toFixed(2)}`, 30, 22);
+
   // === BALL FLIGHT ===
   if (trajectory && trajectory.length > 2 && animationProgress > 0) {
     const pointCount = Math.floor(trajectory.length * animationProgress);
+
+    // DEBUG: show pointCount
+    ctx.fillStyle = '#ff0000';
+    ctx.fillText(`pts=${pointCount}`, 30, 38);
 
     // Build screen points array
     const screenPts: { x: number; y: number }[] = [];
@@ -569,6 +584,34 @@ function drawGroundView(
       const p = trajectory[i];
       const sp = projectH(p.x * M_TO_YARDS, p.y * M_TO_YARDS, p.z * M_TO_YARDS);
       if (sp) screenPts.push(sp);
+    }
+
+    // DEBUG: show screen points count and first/last coords
+    ctx.fillText(`screenPts=${screenPts.length}`, 30, 54);
+    if (screenPts.length > 0) {
+      ctx.fillText(`first=(${screenPts[0].x.toFixed(0)},${screenPts[0].y.toFixed(0)})`, 30, 70);
+      const last = screenPts[screenPts.length - 1];
+      ctx.fillText(`last=(${last.x.toFixed(0)},${last.y.toFixed(0)})`, 30, 86);
+
+      // DEBUG: Draw big red dots at first and last screen points
+      ctx.fillStyle = '#ff0000';
+      ctx.beginPath();
+      ctx.arc(screenPts[0].x, screenPts[0].y, 10, 0, 2 * Math.PI);
+      ctx.fill();
+
+      ctx.fillStyle = '#00ff00';
+      ctx.beginPath();
+      ctx.arc(last.x, last.y, 10, 0, 2 * Math.PI);
+      ctx.fill();
+    }
+
+    // DEBUG: also show raw trajectory point values
+    if (pointCount > 0) {
+      const p0 = trajectory[0];
+      const pLast = trajectory[Math.min(pointCount - 1, trajectory.length - 1)];
+      ctx.fillStyle = '#ff0000';
+      ctx.fillText(`raw0=(${(p0.x*M_TO_YARDS).toFixed(1)},${(p0.y*M_TO_YARDS).toFixed(1)},${(p0.z*M_TO_YARDS).toFixed(1)})`, 30, 102);
+      ctx.fillText(`rawN=(${(pLast.x*M_TO_YARDS).toFixed(1)},${(pLast.y*M_TO_YARDS).toFixed(1)},${(pLast.z*M_TO_YARDS).toFixed(1)})`, 30, 118);
     }
 
     if (screenPts.length > 1) {
