@@ -38,29 +38,35 @@ export interface ShotResult {
 }
 
 export function simulate(club: ClubData, powerPercent: number): ShotResult {
-  // Power scaling (non-linear — sweet spot at 78%)
+  // Contact quality — Gaussian peak at sweet spot (78%).
+  // The power meter represents timing / strike purity, not raw power.
+  // Perfect timing (78%) = full club-head speed. Mishits lose speed & accuracy.
   const sweetSpot = 0.78;
   const powerFactor = powerPercent / 100;
-  const sweetSpotBonus = 1 - Math.abs(powerFactor - sweetSpot) * 0.15;
-  const effectivePower = powerFactor * sweetSpotBonus;
+  const distFromSweet = Math.abs(powerFactor - sweetSpot);
+  // contactQuality: 1.0 at sweet spot, ~0.78 at 100%, ~0.67 at 50%, ~0.31 at 0%
+  const contactQuality = 0.3 + 0.7 * Math.exp(-distFromSweet * distFromSweet * 8);
 
-  // Club speed with variance
-  const clubSpeedMph = club.speed * effectivePower * (0.97 + Math.random() * 0.06);
-  // Ball speed from smash factor with slight variance
+  // Club speed: base speed × contact quality × small human variance (±3%)
+  const clubSpeedMph = club.speed * contactQuality * (0.97 + Math.random() * 0.06);
+  // Ball speed: club speed × smash factor × small variance (±2%)
   const smashVariance = club.smash * (0.98 + Math.random() * 0.04);
   const ballSpeedMph = clubSpeedMph * smashVariance;
   const ballSpeedMs = ballSpeedMph * MPH_TO_MS;
 
-  // Launch angle with variance
-  const launchDeg = club.launch * (0.95 + Math.random() * 0.10);
+  // Launch angle — mishits add loft variance (pure strike is consistent)
+  const loftJitter = 1 + (1 - contactQuality) * (Math.random() - 0.5) * 0.3;
+  const launchDeg = club.launch * (0.97 + Math.random() * 0.06) * loftJitter;
   const launchRad = (launchDeg * Math.PI) / 180;
 
-  // Spin rate with variance
-  const spinRate = club.spin * (0.92 + Math.random() * 0.16);
+  // Spin rate — mishits add spin variance
+  const spinJitter = 1 + (1 - contactQuality) * (Math.random() - 0.3) * 0.4;
+  const spinRate = club.spin * (0.94 + Math.random() * 0.12) * spinJitter;
   const spinRadPerSec = (spinRate * 2 * Math.PI) / 60;
 
-  // Lateral angle variance (offline dispersion)
-  const offlineAngleDeg = (Math.random() - 0.5) * 6 * (1 - effectivePower * 0.3);
+  // Lateral dispersion — worse contact = more offline
+  const offlineMultiplier = 1 + (1 - contactQuality) * 2.5;
+  const offlineAngleDeg = (Math.random() - 0.5) * 4 * offlineMultiplier;
   const offlineAngleRad = (offlineAngleDeg * Math.PI) / 180;
 
   // Initial velocity components

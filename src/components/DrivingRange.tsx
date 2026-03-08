@@ -111,7 +111,36 @@ export default function DrivingRange() {
     setSwingVideoUrl(url);
     setIsRecording(false);
     setViewMode('simulator');
-  }, []);
+
+    // Auto-simulate a shot from the recorded swing.
+    // Since we can't analyse the video, generate a realistic power value
+    // centred around the sweet spot with natural human variance.
+    const swingPower = 68 + Math.random() * 22; // 68–90%, clusters near sweet spot
+    const club = getClub(selectedClub);
+    const result = simulate(club, swingPower);
+    setCurrentShot(result);
+    setIsAnimating(true);
+    setAnimProgress(0);
+    animStartRef.current = performance.now();
+
+    const clubName = CLUBS.find(c => c.key === selectedClub)?.name ?? selectedClub;
+
+    const animateShot = (now: number) => {
+      const elapsed = now - animStartRef.current;
+      const progress = Math.min(elapsed / ANIMATION_DURATION, 1);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setAnimProgress(eased);
+
+      if (progress < 1) {
+        animFrameRef.current = requestAnimationFrame(animateShot);
+      } else {
+        setIsAnimating(false);
+        setShots(prev => [...prev, { club: clubName, result }]);
+      }
+    };
+
+    animFrameRef.current = requestAnimationFrame(animateShot);
+  }, [selectedClub]);
 
   const handleProfileSave = useCallback((updated: UserProfile) => {
     setProfile(updated);
