@@ -7,9 +7,12 @@ import PowerMeter from './PowerMeter';
 import ClubSelector from './ClubSelector';
 import LaunchMonitor from './LaunchMonitor';
 import ShotHistory from './ShotHistory';
-import ARCamera from './ARCamera';
+import SwingCamera from './SwingCamera';
+import SwingPlayback from './SwingPlayback';
 
 const ANIMATION_DURATION = 2500; // ms
+
+type ViewMode = 'simulator' | 'camera';
 
 interface ShotRecord {
   club: string;
@@ -31,7 +34,9 @@ export default function DrivingRange() {
   const [isAnimating, setIsAnimating] = useState(false);
   const animStartRef = useRef(0);
   const animFrameRef = useRef(0);
-  const [arMode, setArMode] = useState(false);
+  const [viewMode, setViewMode] = useState<ViewMode>('simulator');
+  const [isRecording, setIsRecording] = useState(false);
+  const [swingVideoUrl, setSwingVideoUrl] = useState<string | null>(null);
 
   // Persist shots to localStorage
   useEffect(() => {
@@ -95,100 +100,134 @@ export default function DrivingRange() {
     club: s.club,
   }));
 
+  const handleRecordingComplete = useCallback((url: string) => {
+    setSwingVideoUrl(url);
+    setIsRecording(false);
+    setViewMode('simulator');
+  }, []);
+
   return (
     <div className="min-h-screen bg-dark-bg flex flex-col items-center px-4 py-6 gap-5 max-w-md mx-auto">
       {/* Header */}
       <header className="text-center flex flex-col items-center gap-1 relative w-full">
         <h1 className="text-gold text-xl font-bold tracking-widest uppercase">ARC</h1>
         <p className="text-[10px] text-dark-text tracking-[0.3em] uppercase">Pocket Golf Sim</p>
-        <button
-          onClick={() => setArMode(true)}
-          className="absolute right-0 top-0 px-3 py-1.5 rounded-lg bg-gold/10 border border-gold/30 text-gold text-[10px] tracking-widest uppercase hover:bg-gold/20 transition-colors cursor-pointer"
-        >
-          AR
-        </button>
       </header>
 
-      {/* Club selector */}
+      {/* View toggle */}
+      <div className="flex rounded-lg overflow-hidden border border-dark-border w-full">
+        <button
+          onClick={() => setViewMode('simulator')}
+          className={`flex-1 py-2 text-[10px] tracking-widest uppercase transition-colors cursor-pointer ${
+            viewMode === 'simulator'
+              ? 'bg-gold/20 text-gold'
+              : 'bg-dark-card text-dark-text'
+          }`}
+        >
+          Simulator
+        </button>
+        <button
+          onClick={() => setViewMode('camera')}
+          className={`flex-1 py-2 text-[10px] tracking-widest uppercase transition-colors cursor-pointer ${
+            viewMode === 'camera'
+              ? 'bg-gold/20 text-gold'
+              : 'bg-dark-card text-dark-text'
+          }`}
+        >
+          Camera
+        </button>
+      </div>
+
+      {/* Club selector (always visible) */}
       <ClubSelector selected={selectedClub} onSelect={setSelectedClub} />
 
-      {/* Range view */}
-      <div className="w-full flex flex-col items-center gap-3">
-        <div className="text-[10px] text-dark-text tracking-widest uppercase text-center">
-          Range View
-        </div>
-        <RangeCanvas
-          width={dimensions.w}
-          height={dimensions.h}
-          trajectory={currentShot?.trajectory ?? null}
-          animationProgress={animProgress}
-          shotLandings={shotLandings}
-        />
-      </div>
-
-      {/* Trajectory view */}
-      <div className="w-full flex flex-col items-center gap-3">
-        <div className="text-[10px] text-dark-text tracking-widest uppercase text-center">
-          Trajectory
-        </div>
-        <TrajectoryCanvas
-          width={dimensions.w}
-          height={Math.round(dimensions.w * 0.45)}
-          trajectory={currentShot?.trajectory ?? null}
-          animationProgress={animProgress}
-          apex={currentShot?.apex ?? 0}
-        />
-      </div>
-
-      {/* Power meter */}
-      <div className="w-full">
-        <PowerMeter onSwing={handleSwing} disabled={isAnimating} />
-      </div>
-
-      {/* Launch monitor */}
-      <div className="w-full flex flex-col gap-2">
-        <div className="text-[10px] text-dark-text tracking-widest uppercase text-center">
-          Launch Monitor
-        </div>
-        <LaunchMonitor shot={currentShot} />
-      </div>
-
-      {/* Shot history */}
-      <div className="w-full flex flex-col gap-2">
-        <div className="flex items-center justify-between">
-          <div className="text-[10px] text-dark-text tracking-widest uppercase">
-            Shot History
-          </div>
-          {shots.length > 0 && (
-            <button
-              onClick={clearHistory}
-              className="text-[10px] text-dark-text hover:text-red-400 transition-colors cursor-pointer"
-            >
-              Clear
-            </button>
+      {viewMode === 'simulator' && (
+        <>
+          {/* Swing replay (if recorded) */}
+          {swingVideoUrl && (
+            <SwingPlayback
+              videoUrl={swingVideoUrl}
+              onClose={() => {
+                URL.revokeObjectURL(swingVideoUrl);
+                setSwingVideoUrl(null);
+              }}
+            />
           )}
-        </div>
-        <ShotHistory shots={shots} />
-      </div>
+
+          {/* Range view */}
+          <div className="w-full flex flex-col items-center gap-3">
+            <div className="text-[10px] text-dark-text tracking-widest uppercase text-center">
+              Range View
+            </div>
+            <RangeCanvas
+              width={dimensions.w}
+              height={dimensions.h}
+              trajectory={currentShot?.trajectory ?? null}
+              animationProgress={animProgress}
+              shotLandings={shotLandings}
+            />
+          </div>
+
+          {/* Trajectory view */}
+          <div className="w-full flex flex-col items-center gap-3">
+            <div className="text-[10px] text-dark-text tracking-widest uppercase text-center">
+              Trajectory
+            </div>
+            <TrajectoryCanvas
+              width={dimensions.w}
+              height={Math.round(dimensions.w * 0.45)}
+              trajectory={currentShot?.trajectory ?? null}
+              animationProgress={animProgress}
+              apex={currentShot?.apex ?? 0}
+            />
+          </div>
+
+          {/* Power meter */}
+          <div className="w-full">
+            <PowerMeter onSwing={handleSwing} disabled={isAnimating} />
+          </div>
+
+          {/* Launch monitor */}
+          <div className="w-full flex flex-col gap-2">
+            <div className="text-[10px] text-dark-text tracking-widest uppercase text-center">
+              Launch Monitor
+            </div>
+            <LaunchMonitor shot={currentShot} />
+          </div>
+
+          {/* Shot history */}
+          <div className="w-full flex flex-col gap-2">
+            <div className="flex items-center justify-between">
+              <div className="text-[10px] text-dark-text tracking-widest uppercase">
+                Shot History
+              </div>
+              {shots.length > 0 && (
+                <button
+                  onClick={clearHistory}
+                  className="text-[10px] text-dark-text hover:text-red-400 transition-colors cursor-pointer"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+            <ShotHistory shots={shots} />
+          </div>
+        </>
+      )}
 
       {/* Footer */}
       <footer className="text-[9px] text-dark-text/50 text-center py-4">
         ARC Pocket Golf SIM v0.1 — Driving Range MVP
       </footer>
 
-      {/* AR Camera overlay */}
-      {arMode && (
-        <>
-          <ARCamera
-            trajectory={currentShot?.trajectory ?? null}
-            animationProgress={animProgress}
-            onClose={() => setArMode(false)}
-          />
-          {/* Power meter floated over AR view */}
-          <div className="fixed bottom-6 left-4 right-4 z-[60]">
-            <PowerMeter onSwing={handleSwing} disabled={isAnimating} />
-          </div>
-        </>
+      {/* Camera overlay */}
+      {viewMode === 'camera' && (
+        <SwingCamera
+          onClose={() => setViewMode('simulator')}
+          isRecording={isRecording}
+          onRecordingComplete={handleRecordingComplete}
+          onStartRecording={() => setIsRecording(true)}
+        />
       )}
     </div>
   );
