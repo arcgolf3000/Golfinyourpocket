@@ -34,15 +34,16 @@ export default function TrajectoryCanvas({ width, height, trajectory, animationP
 
     // Background: sky gradient
     const skyGrad = ctx.createLinearGradient(0, 0, 0, height);
-    skyGrad.addColorStop(0, '#0c1e30');    // dark sky
-    skyGrad.addColorStop(0.65, '#1a3a4a'); // lighter horizon
-    skyGrad.addColorStop(0.75, '#1a4a2a'); // tree line hint
-    skyGrad.addColorStop(0.85, '#1a6b38'); // fairway
-    skyGrad.addColorStop(1, '#1e7a40');    // ground
+    skyGrad.addColorStop(0, '#0a1628');
+    skyGrad.addColorStop(0.55, '#132a45');
+    skyGrad.addColorStop(0.7, '#1a3d55');
+    skyGrad.addColorStop(0.8, '#0e3d1c');
+    skyGrad.addColorStop(0.9, '#1a6b38');
+    skyGrad.addColorStop(1, '#1e7a40');
     ctx.fillStyle = skyGrad;
     ctx.fillRect(0, 0, width, height);
 
-    // Ground line (thicker green turf line)
+    // Ground line (turf)
     const groundLineY = padT + plotH;
     ctx.fillStyle = '#2d8a4e';
     ctx.fillRect(padL, groundLineY - 1, plotW, 3);
@@ -61,7 +62,7 @@ export default function TrajectoryCanvas({ width, height, trajectory, animationP
     const scaleX = plotW / Math.max(maxX, 1);
     const scaleY = plotH / Math.max(maxY * 1.15, 1);
 
-    // Grid lines (subtle)
+    // Grid lines
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
     ctx.lineWidth = 1;
     const ySteps = 4;
@@ -79,10 +80,53 @@ export default function TrajectoryCanvas({ width, height, trajectory, animationP
       ctx.fillText(`${Math.round(yVal)}`, padL - 5, py + 3);
     }
 
+    // === PREDICTED FULL TRAJECTORY (shown immediately, faded) ===
+    if (animationProgress < 1) {
+      ctx.beginPath();
+      ctx.strokeStyle = 'rgba(255, 204, 51, 0.12)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 4]);
+      for (let i = 0; i < trajectory.length; i++) {
+        const p = trajectory[i];
+        const px = padL + p.x * M_TO_YARDS * scaleX;
+        const py = padT + plotH - p.y * M_TO_YARDS * scaleY;
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Predicted landing marker
+      const finalP = trajectory[trajectory.length - 1];
+      const finalPx = padL + finalP.x * M_TO_YARDS * scaleX;
+      const finalPy = padT + plotH;
+      const pulse = 0.5 + Math.sin(Date.now() * 0.004) * 0.3;
+
+      ctx.strokeStyle = `rgba(255, 204, 51, ${0.4 * pulse})`;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(finalPx, finalPy, 8, 0, 2 * Math.PI);
+      ctx.stroke();
+
+      ctx.fillStyle = `rgba(255, 204, 51, ${0.15 * pulse})`;
+      ctx.beginPath();
+      ctx.arc(finalPx, finalPy, 8, 0, 2 * Math.PI);
+      ctx.fill();
+
+      // Predicted distance label
+      const predDist = units === 'metric'
+        ? `${Math.round(finalP.x * M_TO_YARDS * YARDS_TO_METRES)}m`
+        : `${Math.round(finalP.x * M_TO_YARDS)} yds`;
+      ctx.font = '9px "DM Sans", system-ui';
+      ctx.textAlign = 'center';
+      ctx.fillStyle = `rgba(255, 204, 51, ${0.6 * pulse})`;
+      ctx.fillText(predDist, finalPx, finalPy + 14);
+    }
+
     const pointCount = Math.floor(trajectory.length * animationProgress);
     if (pointCount < 2) return;
 
-    // Gradient fill under curve (green tinted)
+    // Gradient fill under curve
     const gradient = ctx.createLinearGradient(0, padT, 0, padT + plotH);
     gradient.addColorStop(0, 'rgba(255, 204, 51, 0.12)');
     gradient.addColorStop(0.5, 'rgba(34, 139, 34, 0.08)');
@@ -102,23 +146,56 @@ export default function TrajectoryCanvas({ width, height, trajectory, animationP
     ctx.fillStyle = gradient;
     ctx.fill();
 
-    // Trajectory line (white with gold glow)
+    // Trajectory line (Toptracer style - gradient from red to yellow)
     ctx.shadowColor = 'rgba(255, 204, 51, 0.4)';
     ctx.shadowBlur = 6;
-    ctx.beginPath();
-    ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 2;
-    for (let i = 0; i < pointCount; i++) {
+    for (let i = 1; i < pointCount; i++) {
       const p = trajectory[i];
+      const prev = trajectory[i - 1];
       const px = padL + p.x * M_TO_YARDS * scaleX;
       const py = padT + plotH - p.y * M_TO_YARDS * scaleY;
-      if (i === 0) ctx.moveTo(px, py);
-      else ctx.lineTo(px, py);
+      const ppx = padL + prev.x * M_TO_YARDS * scaleX;
+      const ppy = padT + plotH - prev.y * M_TO_YARDS * scaleY;
+
+      const t = i / trajectory.length;
+      // Color gradient: red → yellow → white along trajectory
+      const r = Math.round(255);
+      const g = Math.round(80 + t * 175);
+      const b = Math.round(t > 0.7 ? (t - 0.7) / 0.3 * 200 : 40);
+
+      ctx.beginPath();
+      ctx.strokeStyle = `rgb(${r}, ${g}, ${b})`;
+      ctx.lineWidth = 2.5;
+      ctx.moveTo(ppx, ppy);
+      ctx.lineTo(px, py);
+      ctx.stroke();
     }
-    ctx.stroke();
     ctx.shadowBlur = 0;
 
-    // Apex marker (only show when animation is past apex)
+    // Current ball position
+    if (pointCount > 0) {
+      const current = trajectory[Math.min(pointCount - 1, trajectory.length - 1)];
+      const bx = padL + current.x * M_TO_YARDS * scaleX;
+      const by = padT + plotH - current.y * M_TO_YARDS * scaleY;
+
+      // Glow
+      const glow = ctx.createRadialGradient(bx, by, 0, bx, by, 14);
+      glow.addColorStop(0, 'rgba(255, 255, 255, 0.9)');
+      glow.addColorStop(0.3, 'rgba(255, 204, 51, 0.4)');
+      glow.addColorStop(1, 'rgba(255, 204, 51, 0)');
+      ctx.beginPath();
+      ctx.arc(bx, by, 14, 0, 2 * Math.PI);
+      ctx.fillStyle = glow;
+      ctx.fill();
+
+      // Ball
+      ctx.beginPath();
+      ctx.arc(bx, by, 4, 0, 2 * Math.PI);
+      ctx.fillStyle = '#ffffff';
+      ctx.fill();
+    }
+
+    // Apex marker
     if (apex > 0 && animationProgress > 0.4) {
       const apexPoint = trajectory.reduce((max, p) => p.y > max.y ? p : max, trajectory[0]);
       const apexIdx = trajectory.indexOf(apexPoint);
@@ -149,7 +226,7 @@ export default function TrajectoryCanvas({ width, height, trajectory, animationP
         ctx.textAlign = 'center';
         const metrics = ctx.measureText(label);
         const lw = metrics.width + 8;
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
         ctx.beginPath();
         ctx.roundRect(ax - lw / 2, ay - 22, lw, 14, 3);
         ctx.fill();
@@ -166,7 +243,13 @@ export default function TrajectoryCanvas({ width, height, trajectory, animationP
   }, [width, height, trajectory, animationProgress, apex, units]);
 
   useEffect(() => {
-    draw();
+    let frameId: number;
+    const loop = () => {
+      draw();
+      frameId = requestAnimationFrame(loop);
+    };
+    frameId = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(frameId);
   }, [draw]);
 
   return (
