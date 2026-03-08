@@ -281,9 +281,9 @@ function projectGround(
   const cx = width / 2;
   // Ground position (no height)
   const gndY = groundY - (groundY - horizon) * (1 - scale);
-  // Height offset: very aggressive multiplier so ball visibly arcs into sky
-  // A 30-yard apex should reach near the top of the canvas
-  const heightPx = heightYards * (height * 0.06) * (0.4 + scale * 0.6);
+  // Height offset: aggressive multiplier so ball visibly arcs into sky
+  // A 30-yard apex should reach well above the horizon
+  const heightPx = heightYards * (height * 0.035) * (0.4 + scale * 0.6);
   const screenX = cx + lateralYards * scale * 3.5;
   const screenY = gndY - heightPx;
   return { x: screenX, y: screenY, scale };
@@ -298,9 +298,9 @@ function drawGroundView(
   shotLandings: Array<{ x: number; z: number; club: string }>,
   units: UnitSystem,
 ) {
-  // More sky visible — horizon at 55% from top so ball has room to fly
-  const horizon = height * 0.55;
-  const groundY = height - 24;
+  // Horizon at 35% — plenty of fairway visible with sky above for ball flight
+  const horizon = height * 0.35;
+  const groundY = height - 16;
   const focalLength = 60;
 
   // Helper for ground-only projection (height=0)
@@ -338,11 +338,11 @@ function drawGroundView(
       ctx.fill();
     }
   };
-  drawCloud(width * 0.15, horizon * 0.18, 18, 0.35);
-  drawCloud(width * 0.55, horizon * 0.12, 22, 0.3);
-  drawCloud(width * 0.82, horizon * 0.25, 15, 0.25);
-  drawCloud(width * 0.35, horizon * 0.38, 20, 0.2);
-  drawCloud(width * 0.7, horizon * 0.45, 16, 0.15);
+  drawCloud(width * 0.15, horizon * 0.3, 14, 0.35);
+  drawCloud(width * 0.55, horizon * 0.2, 18, 0.3);
+  drawCloud(width * 0.82, horizon * 0.4, 12, 0.25);
+  drawCloud(width * 0.35, horizon * 0.55, 16, 0.2);
+  drawCloud(width * 0.7, horizon * 0.65, 13, 0.15);
 
   // === MOUNTAINS ===
   // Far mountain range (bluish/hazy)
@@ -350,7 +350,7 @@ function drawGroundView(
   ctx.beginPath();
   ctx.moveTo(0, horizon);
   for (let x = 0; x <= width; x += 3) {
-    const mh = Math.sin(x * 0.008) * 30 + Math.sin(x * 0.02) * 15 + Math.cos(x * 0.005) * 20 + 35;
+    const mh = Math.sin(x * 0.008) * 22 + Math.sin(x * 0.02) * 12 + Math.cos(x * 0.005) * 15 + 28;
     ctx.lineTo(x, horizon - mh);
   }
   ctx.lineTo(width, horizon);
@@ -362,7 +362,7 @@ function drawGroundView(
   ctx.beginPath();
   ctx.moveTo(0, horizon);
   for (let x = 0; x <= width; x += 3) {
-    const mh = Math.sin(x * 0.012 + 1) * 18 + Math.sin(x * 0.03) * 10 + Math.cos(x * 0.007 + 2) * 12 + 20;
+    const mh = Math.sin(x * 0.012 + 1) * 14 + Math.sin(x * 0.03) * 8 + Math.cos(x * 0.007 + 2) * 10 + 16;
     ctx.lineTo(x, horizon - mh);
   }
   ctx.lineTo(width, horizon);
