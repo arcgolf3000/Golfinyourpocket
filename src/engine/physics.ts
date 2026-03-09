@@ -5,12 +5,20 @@ const GRAVITY = 9.81;           // m/s²
 const BALL_MASS = 0.04593;      // kg
 const BALL_RADIUS = 0.02135;    // m
 const AIR_DENSITY = 1.225;      // kg/m³
-const DRAG_COEFF = 0.24;
-const MAGNUS_COEFF = 0.000008;
 const DT = 0.008;               // simulation timestep (seconds)
 
 // Cross-sectional area of ball
 const BALL_AREA = Math.PI * BALL_RADIUS * BALL_RADIUS;
+
+// Aerodynamic coefficients — calibrated against TrackMan PGA Tour averages.
+// Based on Quintavalla (2002) dimpled golf ball model with spin-parameter
+// dependent lift (CL) and drag (Cd) coefficients.
+// CL(S) = CL_BASE + CL_SPIN * S,  Cd(S) = CD_BASE + CD_SPIN * S
+// where S = ω·r / v (spin parameter).
+const CL_BASE = 0.14;    // lift coefficient at zero spin parameter
+const CL_SPIN = 0.55;    // lift increase per unit spin parameter
+const CD_BASE = 0.22;    // drag coefficient at zero spin parameter
+const CD_SPIN = 0.50;    // drag increase per unit spin parameter
 
 // Conversion factors
 const MPH_TO_MS = 0.44704;
@@ -84,25 +92,33 @@ export function simulate(club: ClubData, powerPercent: number, offlineBias: numb
 
   const trajectory: TrajectoryPoint[] = [{ x: 0, y: 0, z: 0 }];
 
-  // Simulation loop
+  // Simulation loop — Euler integration with spin-parameter aerodynamics
   while (y >= 0 || time < 0.1) {
     const speed = Math.sqrt(vx * vx + vy * vy + vz * vz);
     if (speed === 0) break;
 
-    // Drag force (opposes motion) — spin increases effective drag
-    const spinDragFactor = 1 + (currentSpin / 1000) * 0.15;
-    const dragForceMag = 0.5 * AIR_DENSITY * DRAG_COEFF * spinDragFactor * BALL_AREA * speed * speed;
-    const dragAx = -(dragForceMag * vx) / (BALL_MASS * speed);
-    const dragAy = -(dragForceMag * vy) / (BALL_MASS * speed);
-    const dragAz = -(dragForceMag * vz) / (BALL_MASS * speed);
+    // Spin parameter S = ω·r / v
+    const S = (currentSpin * BALL_RADIUS) / speed;
 
-    // Magnus force (backspin creates lift)
-    const magnusLift = MAGNUS_COEFF * currentSpin * speed;
-    const magnusAy = magnusLift / BALL_MASS;
+    // Lift coefficient CL and drag coefficient Cd (linear with spin parameter)
+    const CL = CL_BASE + CL_SPIN * S;
+    const Cd = CD_BASE + CD_SPIN * S;
+
+    // Dynamic pressure × area
+    const qA = 0.5 * AIR_DENSITY * BALL_AREA * speed * speed;
+
+    // Drag force (opposes motion)
+    const dragForce = qA * Cd;
+    const dragAx = -(dragForce * vx) / (BALL_MASS * speed);
+    const dragAy = -(dragForce * vy) / (BALL_MASS * speed);
+    const dragAz = -(dragForce * vz) / (BALL_MASS * speed);
+
+    // Lift force (backspin creates upward Magnus force)
+    const liftAccel = (qA * CL) / BALL_MASS;
 
     // Total acceleration
     const ax = dragAx;
-    const ay = dragAy - GRAVITY + magnusAy;
+    const ay = dragAy - GRAVITY + liftAccel;
     const az = dragAz;
 
     // Update velocity
