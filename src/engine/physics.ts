@@ -37,7 +37,8 @@ export interface ShotResult {
   dir: 'L' | 'R' | 'ST';
 }
 
-export function simulate(club: ClubData, powerPercent: number): ShotResult {
+// offlineBias: -1 (pull/draw) to +1 (push/fade), 0 = straight
+export function simulate(club: ClubData, powerPercent: number, offlineBias: number = 0): ShotResult {
   // Contact quality — Gaussian peak at sweet spot (78%).
   // The power meter represents timing / strike purity, not raw power.
   // Perfect timing (78%) = full club-head speed. Mishits lose speed & accuracy.
@@ -64,9 +65,10 @@ export function simulate(club: ClubData, powerPercent: number): ShotResult {
   const spinRate = club.spin * (0.94 + Math.random() * 0.12) * spinJitter;
   const spinRadPerSec = (spinRate * 2 * Math.PI) / 60;
 
-  // Lateral dispersion — worse contact = more offline
+  // Lateral dispersion — worse contact = more offline, bias shifts centre
   const offlineMultiplier = 1 + (1 - contactQuality) * 2.5;
-  const offlineAngleDeg = (Math.random() - 0.5) * 4 * offlineMultiplier;
+  const biasAngle = offlineBias * 3; // ±3° for full bias
+  const offlineAngleDeg = biasAngle + (Math.random() - 0.5) * 4 * offlineMultiplier;
   const offlineAngleRad = (offlineAngleDeg * Math.PI) / 180;
 
   // Initial velocity components

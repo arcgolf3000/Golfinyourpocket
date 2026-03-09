@@ -37,7 +37,7 @@ export default function SwingCamera({
     async function startCamera() {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
+          video: { facingMode: 'environment' },
           audio: false,
         });
         if (cancelled) {
@@ -84,83 +84,104 @@ export default function SwingCamera({
 
     if (isRecording) return; // Don't draw guides while recording
 
-    // Down-the-line view: camera behind the golfer, slightly right (or left for lefties)
-    // Golfer in left half, ball flight goes to the right of frame
-    const targetDir = leftHanded ? -1 : 1; // flight direction in frame
+    // Face-on view: camera to the side of the golfer, facing them.
+    // Good for swing analysis with a net setup.
+    // Right-handed: golfer faces left, target/net is to the LEFT of frame
+    // Left-handed: golfer faces right, target/net is to the RIGHT of frame
+    const facingDir = leftHanded ? 1 : -1; // direction golfer faces in frame
 
     // Ground line
-    const groundY = h * 0.65;
-    ctx.strokeStyle = 'rgba(255, 204, 51, 0.3)';
+    const groundY = h * 0.62;
+    ctx.strokeStyle = 'rgba(255, 204, 51, 0.25)';
     ctx.lineWidth = 1;
-    ctx.setLineDash([8, 6]);
+    ctx.setLineDash([6, 5]);
     ctx.beginPath();
-    ctx.moveTo(0, groundY);
-    ctx.lineTo(w, groundY);
+    ctx.moveTo(w * 0.05, groundY);
+    ctx.lineTo(w * 0.95, groundY);
     ctx.stroke();
     ctx.setLineDash([]);
 
-    // Golfer position — left side of frame (right for lefties)
-    const golferX = leftHanded ? w * 0.6 : w * 0.4;
-    const golferW = w * 0.28;
-    const golferTop = h * 0.15;
+    // Golfer silhouette zone — centered in frame
+    const golferX = w * 0.5;
+    const golferW = w * 0.35;
+    const golferTop = h * 0.12;
 
-    ctx.strokeStyle = 'rgba(255, 204, 51, 0.2)';
-    ctx.lineWidth = 2;
-    ctx.setLineDash([8, 5]);
+    ctx.strokeStyle = 'rgba(255, 204, 51, 0.18)';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([6, 5]);
     ctx.strokeRect(golferX - golferW / 2, golferTop, golferW, groundY - golferTop);
     ctx.setLineDash([]);
 
-    ctx.fillStyle = 'rgba(255, 204, 51, 0.5)';
+    // Head circle guide
+    const headY = golferTop + (groundY - golferTop) * 0.12;
+    ctx.strokeStyle = 'rgba(255, 204, 51, 0.15)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(golferX, headY, w * 0.04, 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.fillStyle = 'rgba(255, 204, 51, 0.45)';
     ctx.font = '11px "DM Sans", sans-serif';
     ctx.textAlign = 'center';
     ctx.fillText('GOLFER', golferX, golferTop - 8);
 
-    // Ball position — on ground, slightly toward target
-    const ballX = golferX + targetDir * golferW * 0.3;
+    // Ball — at feet, slightly toward target side
+    const ballX = golferX + facingDir * golferW * 0.15;
     const ballY = groundY;
 
-    ctx.strokeStyle = 'rgba(255, 204, 51, 0.6)';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(ballX, ballY, 14, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.fillStyle = 'rgba(255, 204, 51, 0.3)';
-    ctx.beginPath();
-    ctx.arc(ballX, ballY, 6, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.fillStyle = 'rgba(255, 204, 51, 0.7)';
-    ctx.font = '10px "DM Sans", sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('BALL', ballX, ballY + 24);
-
-    // Flight direction arrow — from ball toward target side
-    const arrowY = groundY - 30;
-    const arrowEnd = targetDir > 0 ? w * 0.92 : w * 0.08;
-    ctx.strokeStyle = 'rgba(255, 204, 51, 0.35)';
+    ctx.strokeStyle = 'rgba(255, 204, 51, 0.5)';
     ctx.lineWidth = 1.5;
     ctx.beginPath();
-    ctx.moveTo(ballX, arrowY);
-    ctx.lineTo(arrowEnd, arrowY);
+    ctx.arc(ballX, ballY, 10, 0, Math.PI * 2);
     ctx.stroke();
-    const headDir = targetDir > 0 ? -1 : 1;
+    ctx.fillStyle = 'rgba(255, 204, 51, 0.25)';
     ctx.beginPath();
-    ctx.moveTo(arrowEnd, arrowY);
-    ctx.lineTo(arrowEnd + headDir * 8, arrowY - 4);
-    ctx.moveTo(arrowEnd, arrowY);
-    ctx.lineTo(arrowEnd + headDir * 8, arrowY + 4);
+    ctx.arc(ballX, ballY, 4, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = 'rgba(255, 204, 51, 0.6)';
+    ctx.font = '9px "DM Sans", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('BALL', ballX, ballY + 20);
+
+    // Net / target zone — on the side the golfer faces
+    const netX = facingDir > 0 ? w * 0.88 : w * 0.12;
+    const netTop = h * 0.08;
+    const netW = w * 0.16;
+
+    ctx.strokeStyle = 'rgba(255, 204, 51, 0.12)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 4]);
+    ctx.strokeRect(netX - netW / 2, netTop, netW, groundY - netTop);
+    ctx.setLineDash([]);
+
+    ctx.fillStyle = 'rgba(255, 204, 51, 0.3)';
+    ctx.font = '9px "DM Sans", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('NET', netX, netTop - 6);
+
+    // Target direction arrow — from ball to net
+    const arrowY = groundY - 20;
+    ctx.strokeStyle = 'rgba(255, 204, 51, 0.3)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(ballX + facingDir * 15, arrowY);
+    ctx.lineTo(netX, arrowY);
+    ctx.stroke();
+    // Arrowhead
+    const aDir = -facingDir;
+    ctx.beginPath();
+    ctx.moveTo(netX, arrowY);
+    ctx.lineTo(netX + aDir * 6, arrowY - 3);
+    ctx.moveTo(netX, arrowY);
+    ctx.lineTo(netX + aDir * 6, arrowY + 3);
     ctx.stroke();
 
-    ctx.fillStyle = 'rgba(255, 204, 51, 0.4)';
-    ctx.font = '9px "DM Sans", sans-serif';
-    ctx.textAlign = targetDir > 0 ? 'right' : 'left';
-    ctx.fillText('BALL FLIGHT', targetDir > 0 ? w * 0.96 : w * 0.04, arrowY - 8);
-
-    // Setup instruction at top
-    ctx.fillStyle = 'rgba(255, 204, 51, 0.5)';
+    // Setup instruction
+    ctx.fillStyle = 'rgba(255, 204, 51, 0.45)';
     ctx.font = '10px "DM Sans", sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('Stand behind the golfer — down the target line', w / 2, h * 0.08);
+    ctx.fillText('Face-on view — camera to the side', w / 2, h * 0.05);
   }, [isRecording, leftHanded]);
 
   // Render loop

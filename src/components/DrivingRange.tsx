@@ -18,10 +18,16 @@ type ViewMode = 'simulator' | 'camera' | 'profile';
 
 // Swing effort maps to power meter range
 const SWING_EFFORTS = [
-  { label: 'Chip',       desc: 'Short game, ~10-30%', min: 10, max: 30 },
-  { label: 'Half',       desc: 'Easy swing, ~40-55%', min: 40, max: 55 },
-  { label: '¾ Swing',    desc: 'Controlled, ~55-72%', min: 55, max: 72 },
-  { label: 'Full',       desc: 'Full send, ~73-90%',  min: 73, max: 90 },
+  { label: 'Chip',       desc: '~10-30%', min: 10, max: 30 },
+  { label: 'Half',       desc: '~40-55%', min: 40, max: 55 },
+  { label: '¾',          desc: '~55-72%', min: 55, max: 72 },
+  { label: 'Full',       desc: '~73-90%', min: 73, max: 90 },
+] as const;
+
+const SHOT_SHAPES = [
+  { label: '← Pull', bias: -0.8 },
+  { label: 'Straight', bias: 0 },
+  { label: 'Push →', bias: 0.8 },
 ] as const;
 
 interface ShotRecord {
@@ -50,6 +56,7 @@ export default function DrivingRange() {
   const [swingVideoUrl, setSwingVideoUrl] = useState<string | null>(null);
   const [rangeViewType, setRangeViewType] = useState<RangeViewType>('ground');
   const [pendingSwingVideo, setPendingSwingVideo] = useState<string | null>(null); // waiting for effort pick
+  const [pendingEffort, setPendingEffort] = useState<{ min: number; max: number } | null>(null); // step 2: pick shape
 
   // Persist shots to localStorage
   useEffect(() => {
@@ -122,15 +129,24 @@ export default function DrivingRange() {
     setPendingSwingVideo(url); // show effort picker
   }, []);
 
-  // User picks swing effort after camera recording → simulate shot
+  // Step 1: user picks effort → show shape picker
   const handleEffortPick = useCallback((min: number, max: number) => {
+    setPendingEffort({ min, max });
+  }, []);
+
+  // Step 2: user picks shot shape → simulate and animate
+  const handleShapePick = useCallback((bias: number) => {
+    const effort = pendingEffort;
+    if (!effort) return;
+
     const url = pendingSwingVideo;
     setPendingSwingVideo(null);
+    setPendingEffort(null);
     if (url) setSwingVideoUrl(url);
 
-    const swingPower = min + Math.random() * (max - min);
+    const swingPower = effort.min + Math.random() * (effort.max - effort.min);
     const club = getClub(selectedClub);
-    const result = simulate(club, swingPower);
+    const result = simulate(club, swingPower, bias);
     setCurrentShot(result);
     setIsAnimating(true);
     setAnimProgress(0);
@@ -153,7 +169,7 @@ export default function DrivingRange() {
     };
 
     animFrameRef.current = requestAnimationFrame(animateShot);
-  }, [pendingSwingVideo, selectedClub]);
+  }, [pendingEffort, pendingSwingVideo, selectedClub]);
 
   const handleProfileSave = useCallback((updated: UserProfile) => {
     setProfile(updated);
@@ -197,42 +213,81 @@ export default function DrivingRange() {
         />
       )}
 
-      {/* Swing effort picker — shown after camera recording */}
+      {/* Swing data picker — shown after camera recording */}
       {pendingSwingVideo && viewMode === 'simulator' && (
         <div className="fixed inset-0 z-40 bg-black/70 backdrop-blur-sm flex items-center justify-center p-6">
           <div className="bg-dark-card border border-dark-border rounded-2xl p-5 w-full max-w-sm flex flex-col gap-4">
-            <div className="text-center">
-              <div className="text-gold text-sm font-bold tracking-widest uppercase mb-1">
-                How hard was that swing?
-              </div>
-              <div className="text-dark-text text-[10px]">
-                Select your effort level to generate shot data
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              {SWING_EFFORTS.map((e) => (
+            {/* Step 1: Effort */}
+            {!pendingEffort && (
+              <>
+                <div className="text-center">
+                  <div className="text-gold text-sm font-bold tracking-widest uppercase mb-1">
+                    Swing Effort
+                  </div>
+                  <div className="text-dark-text text-[10px]">
+                    How hard did you swing?
+                  </div>
+                </div>
+                <div className="grid grid-cols-4 gap-2">
+                  {SWING_EFFORTS.map((e) => (
+                    <button
+                      key={e.label}
+                      onClick={() => handleEffortPick(e.min, e.max)}
+                      className="flex flex-col items-center gap-0.5 py-3 px-2 rounded-xl border border-dark-border
+                        bg-dark-bg hover:bg-gold/10 hover:border-gold/30 transition-all cursor-pointer active:scale-95"
+                    >
+                      <span className="text-white text-xs font-semibold">{e.label}</span>
+                      <span className="text-dark-text text-[8px]">{e.desc}</span>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {/* Step 2: Shot Shape */}
+            {pendingEffort && (
+              <>
+                <div className="text-center">
+                  <div className="text-gold text-sm font-bold tracking-widest uppercase mb-1">
+                    Shot Shape
+                  </div>
+                  <div className="text-dark-text text-[10px]">
+                    Where did the ball go?
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  {SHOT_SHAPES.map((s) => (
+                    <button
+                      key={s.label}
+                      onClick={() => handleShapePick(s.bias)}
+                      className="flex flex-col items-center gap-0.5 py-3 px-2 rounded-xl border border-dark-border
+                        bg-dark-bg hover:bg-gold/10 hover:border-gold/30 transition-all cursor-pointer active:scale-95"
+                    >
+                      <span className="text-white text-xs font-semibold">{s.label}</span>
+                    </button>
+                  ))}
+                </div>
                 <button
-                  key={e.label}
-                  onClick={() => handleEffortPick(e.min, e.max)}
-                  className="flex flex-col items-center gap-1 py-4 px-3 rounded-xl border border-dark-border
-                    bg-dark-bg hover:bg-gold/10 hover:border-gold/30 transition-all cursor-pointer active:scale-95"
+                  onClick={() => setPendingEffort(null)}
+                  className="text-dark-text text-[10px] text-center cursor-pointer hover:text-white transition-colors"
                 >
-                  <span className="text-white text-sm font-semibold">{e.label}</span>
-                  <span className="text-dark-text text-[9px]">{e.desc}</span>
+                  ← Back
                 </button>
-              ))}
-            </div>
-            <button
-              onClick={() => {
-                if (pendingSwingVideo) {
-                  setSwingVideoUrl(pendingSwingVideo);
-                }
-                setPendingSwingVideo(null);
-              }}
-              className="text-dark-text text-[10px] text-center cursor-pointer hover:text-white transition-colors"
-            >
-              Skip — just save video
-            </button>
+              </>
+            )}
+
+            {!pendingEffort && (
+              <button
+                onClick={() => {
+                  if (pendingSwingVideo) setSwingVideoUrl(pendingSwingVideo);
+                  setPendingSwingVideo(null);
+                  setPendingEffort(null);
+                }}
+                className="text-dark-text text-[10px] text-center cursor-pointer hover:text-white transition-colors"
+              >
+                Skip — just save video
+              </button>
+            )}
           </div>
         </div>
       )}
