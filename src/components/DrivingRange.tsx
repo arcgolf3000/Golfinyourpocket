@@ -16,6 +16,14 @@ const ANIMATION_DURATION = 2500; // ms
 
 type ViewMode = 'simulator' | 'camera' | 'profile';
 
+// Swing effort maps to power meter range
+const SWING_EFFORTS = [
+  { label: 'Chip',       desc: 'Short game, ~10-30%', min: 10, max: 30 },
+  { label: 'Half',       desc: 'Easy swing, ~40-55%', min: 40, max: 55 },
+  { label: '¾ Swing',    desc: 'Controlled, ~55-72%', min: 55, max: 72 },
+  { label: 'Full',       desc: 'Full send, ~73-90%',  min: 73, max: 90 },
+] as const;
+
 interface ShotRecord {
   club: string;
   result: ShotResult;
@@ -41,6 +49,7 @@ export default function DrivingRange() {
   const [isRecording, setIsRecording] = useState(false);
   const [swingVideoUrl, setSwingVideoUrl] = useState<string | null>(null);
   const [rangeViewType, setRangeViewType] = useState<RangeViewType>('ground');
+  const [pendingSwingVideo, setPendingSwingVideo] = useState<string | null>(null); // waiting for effort pick
 
   // Persist shots to localStorage
   useEffect(() => {
@@ -108,14 +117,18 @@ export default function DrivingRange() {
   }));
 
   const handleRecordingComplete = useCallback((url: string) => {
-    setSwingVideoUrl(url);
     setIsRecording(false);
     setViewMode('simulator');
+    setPendingSwingVideo(url); // show effort picker
+  }, []);
 
-    // Auto-simulate a shot from the recorded swing.
-    // Since we can't analyse the video, generate a realistic power value
-    // centred around the sweet spot with natural human variance.
-    const swingPower = 68 + Math.random() * 22; // 68–90%, clusters near sweet spot
+  // User picks swing effort after camera recording → simulate shot
+  const handleEffortPick = useCallback((min: number, max: number) => {
+    const url = pendingSwingVideo;
+    setPendingSwingVideo(null);
+    if (url) setSwingVideoUrl(url);
+
+    const swingPower = min + Math.random() * (max - min);
     const club = getClub(selectedClub);
     const result = simulate(club, swingPower);
     setCurrentShot(result);
@@ -140,7 +153,7 @@ export default function DrivingRange() {
     };
 
     animFrameRef.current = requestAnimationFrame(animateShot);
-  }, [selectedClub]);
+  }, [pendingSwingVideo, selectedClub]);
 
   const handleProfileSave = useCallback((updated: UserProfile) => {
     setProfile(updated);
@@ -182,6 +195,46 @@ export default function DrivingRange() {
           onSave={handleProfileSave}
           onClose={() => setViewMode('simulator')}
         />
+      )}
+
+      {/* Swing effort picker — shown after camera recording */}
+      {pendingSwingVideo && viewMode === 'simulator' && (
+        <div className="fixed inset-0 z-40 bg-black/70 backdrop-blur-sm flex items-center justify-center p-6">
+          <div className="bg-dark-card border border-dark-border rounded-2xl p-5 w-full max-w-sm flex flex-col gap-4">
+            <div className="text-center">
+              <div className="text-gold text-sm font-bold tracking-widest uppercase mb-1">
+                How hard was that swing?
+              </div>
+              <div className="text-dark-text text-[10px]">
+                Select your effort level to generate shot data
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              {SWING_EFFORTS.map((e) => (
+                <button
+                  key={e.label}
+                  onClick={() => handleEffortPick(e.min, e.max)}
+                  className="flex flex-col items-center gap-1 py-4 px-3 rounded-xl border border-dark-border
+                    bg-dark-bg hover:bg-gold/10 hover:border-gold/30 transition-all cursor-pointer active:scale-95"
+                >
+                  <span className="text-white text-sm font-semibold">{e.label}</span>
+                  <span className="text-dark-text text-[9px]">{e.desc}</span>
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={() => {
+                if (pendingSwingVideo) {
+                  setSwingVideoUrl(pendingSwingVideo);
+                }
+                setPendingSwingVideo(null);
+              }}
+              className="text-dark-text text-[10px] text-center cursor-pointer hover:text-white transition-colors"
+            >
+              Skip — just save video
+            </button>
+          </div>
+        </div>
       )}
 
       {viewMode === 'simulator' && (

@@ -84,16 +84,13 @@ export default function SwingCamera({
 
     if (isRecording) return; // Don't draw guides while recording
 
-    // Ball sits between the golfer's feet
-    // Right-handed: target is to the left, golfer faces left
-    // Left-handed: target is to the right, golfer faces right
-    const stancePct = 0.5; // golfer centered
-    const ballPct = 0.5;   // ball between feet
-    const targetDir = leftHanded ? 1 : -1; // 1 = right, -1 = left
+    // Down-the-line view: camera behind the golfer, slightly right (or left for lefties)
+    // Golfer in left half, ball flight goes to the right of frame
+    const targetDir = leftHanded ? -1 : 1; // flight direction in frame
 
-    // Ground line — centered vertically, above bottom controls
+    // Ground line
     const groundY = h * 0.65;
-    ctx.strokeStyle = 'rgba(255, 204, 51, 0.4)';
+    ctx.strokeStyle = 'rgba(255, 204, 51, 0.3)';
     ctx.lineWidth = 1;
     ctx.setLineDash([8, 6]);
     ctx.beginPath();
@@ -102,63 +99,50 @@ export default function SwingCamera({
     ctx.stroke();
     ctx.setLineDash([]);
 
-    // Golfer stance zone — large and easy to see
-    const stanceX = w * stancePct;
-    const stanceW = w * 0.35;
-    const stanceTop = h * 0.18;
+    // Golfer position — left side of frame (right for lefties)
+    const golferX = leftHanded ? w * 0.6 : w * 0.4;
+    const golferW = w * 0.28;
+    const golferTop = h * 0.15;
 
-    ctx.strokeStyle = 'rgba(255, 204, 51, 0.25)';
+    ctx.strokeStyle = 'rgba(255, 204, 51, 0.2)';
     ctx.lineWidth = 2;
     ctx.setLineDash([8, 5]);
-    ctx.strokeRect(stanceX - stanceW / 2, stanceTop, stanceW, groundY - stanceTop);
+    ctx.strokeRect(golferX - golferW / 2, golferTop, golferW, groundY - golferTop);
     ctx.setLineDash([]);
 
-    ctx.fillStyle = 'rgba(255, 204, 51, 0.6)';
-    ctx.font = '13px "DM Sans", sans-serif';
+    ctx.fillStyle = 'rgba(255, 204, 51, 0.5)';
+    ctx.font = '11px "DM Sans", sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('GOLFER', stanceX, stanceTop - 10);
+    ctx.fillText('GOLFER', golferX, golferTop - 8);
 
-    // Feet markers (wide apart)
-    const footY = groundY - 6;
-    const footSpread = stanceW * 0.32;
-    ctx.fillStyle = 'rgba(255, 204, 51, 0.5)';
-    ctx.fillRect(stanceX - footSpread - 6, footY, 12, 6);
-    ctx.fillRect(stanceX + footSpread - 6, footY, 12, 6);
-
-    // Ball position marker — large and clear, between the feet
-    const ballX = w * ballPct;
+    // Ball position — on ground, slightly toward target
+    const ballX = golferX + targetDir * golferW * 0.3;
     const ballY = groundY;
-    const ballR = 10;
 
-    // Outer ring
-    ctx.strokeStyle = 'rgba(255, 204, 51, 0.7)';
-    ctx.lineWidth = 2.5;
+    ctx.strokeStyle = 'rgba(255, 204, 51, 0.6)';
+    ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.arc(ballX, ballY, ballR + 10, 0, Math.PI * 2);
+    ctx.arc(ballX, ballY, 14, 0, Math.PI * 2);
     ctx.stroke();
-
-    // Inner ball
-    ctx.fillStyle = 'rgba(255, 204, 51, 0.5)';
+    ctx.fillStyle = 'rgba(255, 204, 51, 0.3)';
     ctx.beginPath();
-    ctx.arc(ballX, ballY, ballR, 0, Math.PI * 2);
+    ctx.arc(ballX, ballY, 6, 0, Math.PI * 2);
     ctx.fill();
 
-    ctx.font = '13px "DM Sans", sans-serif';
-    ctx.fillStyle = 'rgba(255, 204, 51, 0.8)';
+    ctx.fillStyle = 'rgba(255, 204, 51, 0.7)';
+    ctx.font = '10px "DM Sans", sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('BALL', ballX, ballY + 32);
+    ctx.fillText('BALL', ballX, ballY + 24);
 
-    // Target direction arrow
-    const arrowY = groundY - 40;
-    const arrowStart = ballX;
-    const arrowEnd = targetDir > 0 ? w * 0.9 : w * 0.1;
-    ctx.strokeStyle = 'rgba(255, 204, 51, 0.4)';
+    // Flight direction arrow — from ball toward target side
+    const arrowY = groundY - 30;
+    const arrowEnd = targetDir > 0 ? w * 0.92 : w * 0.08;
+    ctx.strokeStyle = 'rgba(255, 204, 51, 0.35)';
     ctx.lineWidth = 1.5;
     ctx.beginPath();
-    ctx.moveTo(arrowStart, arrowY);
+    ctx.moveTo(ballX, arrowY);
     ctx.lineTo(arrowEnd, arrowY);
     ctx.stroke();
-    // Arrow head
     const headDir = targetDir > 0 ? -1 : 1;
     ctx.beginPath();
     ctx.moveTo(arrowEnd, arrowY);
@@ -167,11 +151,16 @@ export default function SwingCamera({
     ctx.lineTo(arrowEnd + headDir * 8, arrowY + 4);
     ctx.stroke();
 
-    ctx.fillStyle = 'rgba(255, 204, 51, 0.5)';
+    ctx.fillStyle = 'rgba(255, 204, 51, 0.4)';
     ctx.font = '9px "DM Sans", sans-serif';
     ctx.textAlign = targetDir > 0 ? 'right' : 'left';
-    const targetLabelX = targetDir > 0 ? w * 0.96 : w * 0.04;
-    ctx.fillText('TARGET', targetLabelX, arrowY - 8);
+    ctx.fillText('BALL FLIGHT', targetDir > 0 ? w * 0.96 : w * 0.04, arrowY - 8);
+
+    // Setup instruction at top
+    ctx.fillStyle = 'rgba(255, 204, 51, 0.5)';
+    ctx.font = '10px "DM Sans", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Stand behind the golfer — down the target line', w / 2, h * 0.08);
   }, [isRecording, leftHanded]);
 
   // Render loop
